@@ -32,13 +32,15 @@ export function viewDespesas(ctx) {
             h('strong', {}, 'Adicione os moradores primeiro'),
             'É preciso ter pelo menos duas pessoas na casa para dividir uma despesa.'),
         podeCriar && state.despesas.length === 0 && h('div', { class: 'card vazio' },
-            h('strong', {}, 'Nenhuma despesa neste mês'),
-            'Foi ao mercado? Pediu uma pizza? Registre em "Nova despesa" e a divisão é automática.'),
+            h('strong', {}, 'Nenhuma despesa sua neste mês'),
+            'Aqui aparecem as despesas que você pagou ou em que tem uma parte. Registre em "Nova despesa" e a divisão é automática.'),
         h('div', { class: 'stack' }, state.despesas.map((despesa) => cartaoDespesa(despesa, ctx))));
 }
 
 function cartaoDespesa(despesa, { state, recarregar }) {
     const casaId = state.casa.id;
+    // quem não pagou só enxerga a própria parte e não tem ações de cobrança
+    const souPagador = despesa.pagador.id === state.eu.id;
     const abertas = emAberto(despesa);
     const outros = deOutros(despesa);
     const totalOutros = outros.reduce((soma, d) => soma + centavos(d.valor), 0);
@@ -61,7 +63,7 @@ function cartaoDespesa(despesa, { state, recarregar }) {
     async function confirmarRecebimento(divisao) {
         const ok = await confirmar({
             titulo: 'Confirmar recebimento',
-            mensagem: `${despesa.pagador.nome} recebeu ${brl(divisao.valor)} de ${divisao.devedor.nome}?`,
+            mensagem: `Você recebeu ${brl(divisao.valor)} de ${divisao.devedor.nome}?`,
             rotulo: 'Sim, recebi',
         });
         if (ok && await executar(() => api.registrarPagamento(divisao.id), 'Pagamento registrado')) {
@@ -75,33 +77,35 @@ function cartaoDespesa(despesa, { state, recarregar }) {
         h('div', { class: 'despesa-top' },
             h('div', {},
                 h('h3', { class: 'despesa-titulo' }, despesa.descricao),
-                h('p', { class: 'despesa-meta' }, `${despesa.pagador.nome} pagou · ${dataBR(despesa.data)}`)),
+                h('p', { class: 'despesa-meta' },
+                    `${souPagador ? 'Você pagou' : `${despesa.pagador.nome} pagou`} · ${dataBR(despesa.data)}`)),
             h('div', { class: 'despesa-total num' }, brl(despesa.valorTotal))),
 
-        h('div', { class: 'progresso', role: 'progressbar', 'aria-valuenow': percentual,
+        souPagador && h('div', { class: 'progresso', role: 'progressbar', 'aria-valuenow': percentual,
             'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Quanto já foi recebido' },
             h('span', { style: `width:${percentual}%` })),
-        h('p', { class: 'progresso-legenda num' },
+        souPagador && h('p', { class: 'progresso-legenda num' },
             abertas.length === 0 ? 'Tudo recebido' : `${brl(recebido / 100)} de ${brl(totalOutros / 100)} recebidos`),
 
-        h('div', { class: 'divisoes' }, despesa.divisoes.map((d) => linhaDivisao(d, cobrar, confirmarRecebimento))),
+        h('div', { class: 'divisoes' },
+            despesa.divisoes.map((d) => linhaDivisao(d, souPagador, cobrar, confirmarRecebimento))),
 
-        h('div', { class: 'card-head', style: 'margin:.75rem 0 0' },
+        souPagador && h('div', { class: 'card-head', style: 'margin:.75rem 0 0' },
             h('span', {}),
             h('div', { class: 'acoes' },
                 abertas.length >= 2 && h('button', { class: 'btn small', type: 'button', onclick: () => cobrar(abertas) }, 'Cobrar todos'),
                 !algumPago && h('button', { class: 'btn small ghost', type: 'button', onclick: excluir }, 'Excluir'))));
 }
 
-function linhaDivisao(divisao, cobrar, confirmarRecebimento) {
+function linhaDivisao(divisao, souPagador, cobrar, confirmarRecebimento) {
     return h('div', { class: 'divisao' },
         h('div', { class: 'quem' }, avatar(divisao.devedor, true), divisao.devedor.nome),
         h('span', { class: 'valor num' }, brl(divisao.valor)),
         situacao(divisao),
-        !divisao.parteDoPagador && divisao.status !== 'PAGA' && h('div', { class: 'acoes' },
+        souPagador && !divisao.parteDoPagador && divisao.status !== 'PAGA' && h('div', { class: 'acoes' },
             h('button', { class: 'btn small', type: 'button', onclick: () => cobrar([divisao]) },
                 divisao.status === 'COBRADA' ? 'Cobrar de novo' : 'Cobrar'),
-            h('button', { class: 'btn small primary', type: 'button', onclick: () => confirmarRecebimento(divisao) }, 'Recebi')));
+            h('button', { class: 'btn small accent', type: 'button', onclick: () => confirmarRecebimento(divisao) }, 'Recebi')));
 }
 
 function situacao(divisao) {

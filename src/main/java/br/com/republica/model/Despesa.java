@@ -57,6 +57,12 @@ public class Despesa {
         return divisoes.stream().anyMatch(d -> d.getStatus() != StatusDivisao.PAGA);
     }
 
+    /** Verdadeiro se o morador pagou esta despesa ou tem uma parte dela. */
+    public boolean envolve(Long moradorId) {
+        return pagador.getId().equals(moradorId)
+                || divisoes.stream().anyMatch(d -> d.getDevedor().getId().equals(moradorId));
+    }
+
     public Long getId() {
         return id;
     }

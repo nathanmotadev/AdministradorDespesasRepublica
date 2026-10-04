@@ -15,6 +15,10 @@ public class Casa {
     @Column(nullable = false)
     private String nome;
 
+    /** Código que o administrador envia a quem vai morar na casa para criar a conta. */
+    @Column(unique = true, length = 20)
+    private String codigoConvite;
+
     @OneToMany(mappedBy = "casa")
     @OrderBy("nome")
     private List<Morador> moradores = new ArrayList<>();
@@ -22,8 +26,9 @@ public class Casa {
     protected Casa() {
     }
 
-    public Casa(String nome) {
+    public Casa(String nome, String codigoConvite) {
         this.nome = nome;
+        this.codigoConvite = codigoConvite;
     }
 
     public Long getId() {
@@ -36,6 +41,14 @@ public class Casa {
 
     public void setNome(String nome) {
         this.nome = nome;
+    }
+
+    public String getCodigoConvite() {
+        return codigoConvite;
+    }
+
+    public void setCodigoConvite(String codigoConvite) {
+        this.codigoConvite = codigoConvite;
     }
 
     public List<Morador> getMoradores() {

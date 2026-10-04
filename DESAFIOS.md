@@ -22,3 +22,9 @@ Cada item é uma melhoria que mostra um conhecimento diferente. Faça no seu rit
 
 ## Para a entrevista
 Esteja pronto para explicar: por que DTOs, por que `BigDecimal`, por que os acertos são calculados e não gravados, a diferença entre os status HTTP 400 e 422, e o que você faria para escalar para milhares de casas.
+
+## Próximos desafios (pós-login)
+- Limitar tentativas de login e de código de convite (rate limiting).
+- Refresh token / cookie httpOnly.
+- Desativar o console H2 fora do ambiente de desenvolvimento.
+- Atualizar `requests.http` para usar login + Bearer token.

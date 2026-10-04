@@ -13,7 +13,7 @@ API REST + interface web para dividir as contas de uma casa compartilhada: quem 
 
 ## Tecnologias
 
-Java 17 · Spring Boot 3 (Web, Data JPA, Validation) · H2 (arquivo) · springdoc-openapi (Swagger UI) · JUnit 5 + AssertJ + MockMvc · front-end em HTML/CSS/JavaScript puro (módulos ES, sem build).
+Java 17 · Spring Boot 3 (Web, Data JPA, Validation, Security + JWT) · H2 (arquivo) · springdoc-openapi (Swagger UI) · JUnit 5 + AssertJ + MockMvc · front-end em HTML/CSS/JavaScript puro (módulos ES, sem build).
 
 ## Como rodar no IntelliJ
 
@@ -81,3 +81,20 @@ controller  →  service  →  repository  →  banco
 ## Próximos passos
 
 Veja o arquivo [`DESAFIOS.md`](DESAFIOS.md).
+
+## Login, convite e visão por morador
+
+- Cada morador tem conta (e-mail + senha, BCrypt) e recebe um **JWT** (HS256, 12h) no login.
+- Abrir casa: `POST /api/auth/cadastro/casa`. Entrar em casa existente: `POST /api/auth/cadastro/convite` com o código `CASA-XXXXXX` (visível para o admin na aba Casa). Login: `POST /api/auth/login`.
+- A identidade vem sempre do token, nunca da URL. Cada morador só vê despesas e dívidas em que participa (`/api/eu`, `/api/eu/resumo`, `/api/eu/dividas`).
+- Só o admin renomeia a casa e adiciona/remove moradores; só o pagador cobra, confirma pagamento ou exclui a despesa.
+- Respostas: 401 sem token/credencial inválida, 403 sem permissão, 404 para dados de outros, 422 regra de negócio.
+- Segredo do JWT: variável de ambiente `JWT_SEGREDO` (mín. 32 caracteres). O padrão serve só para desenvolvimento.
+- Token guardado em `localStorage` (simples, mas exposto a XSS); em produção, preferir cookie httpOnly.
+- Endpoints removidos: `GET/POST /api/casas` e o resumo geral da casa.
+
+- Documentação UML (casos de uso, camadas, classes, ER, estados, sequências): [`docs/UML.md`](docs/UML.md)
+
+## Licença
+
+MIT — veja o arquivo [LICENSE](LICENSE).

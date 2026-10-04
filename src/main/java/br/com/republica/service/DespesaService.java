@@ -3,6 +3,7 @@ package br.com.republica.service;
 import br.com.republica.dto.Dtos.DespesaRequest;
 import br.com.republica.dto.Dtos.DespesaResponse;
 import br.com.republica.dto.Dtos.DivisaoResponse;
+import br.com.republica.exception.AcessoNegadoException;
 import br.com.republica.exception.RecursoNaoEncontradoException;
 import br.com.republica.exception.RegraDeNegocioException;
 import br.com.republica.model.Casa;
@@ -40,13 +41,13 @@ public class DespesaService {
     }
 
     /**
-     * Registra uma despesa paga por um morador e a divide, em partes iguais,
+     * Registra uma despesa paga por quem está logado e a divide, em partes iguais,
      * entre os participantes escolhidos (que podem incluir o próprio pagador).
      */
     @Transactional
-    public DespesaResponse registrar(Long casaId, DespesaRequest request) {
+    public DespesaResponse registrar(Long casaId, DespesaRequest request, Long solicitanteId) {
         Casa casa = casaService.buscarEntidade(casaId);
-        Morador pagador = buscarMoradorAtivo(casaId, request.pagadorId());
+        Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
 
         boolean alguemDevePagador = participantes.stream().anyMatch(p -> !p.getId().equals(pagador.getId()));
@@ -67,28 +68,35 @@ public class DespesaService {
             }
             despesa.adicionarDivisao(divisao);
         }
-        return DespesaResponse.de(despesas.save(despesa));
+        return DespesaResponse.de(despesas.save(despesa), solicitanteId);
     }
 
-    /** Lista as despesas da casa; com {@code mes} informado, só as daquele mês. */
+    /**
+     * Lista as despesas da casa em que o solicitante pagou ou tem parte (as demais não aparecem);
+     * com {@code mes} informado, só as daquele mês.
+     */
     @Transactional(readOnly = true)
-    public List<DespesaResponse> listar(Long casaId, YearMonth mes) {
+    public List<DespesaResponse> listar(Long casaId, YearMonth mes, Long solicitanteId) {
         casaService.buscarEntidade(casaId);
         List<Despesa> encontradas = (mes == null)
                 ? despesas.findByCasaIdOrderByDataDescIdDesc(casaId)
                 : despesas.findByCasaIdAndDataBetweenOrderByDataDescIdDesc(casaId, mes.atDay(1), mes.atEndOfMonth());
-        return encontradas.stream().map(DespesaResponse::de).toList();
+        return encontradas.stream()
+                .filter(d -> d.envolve(solicitanteId))
+                .map(d -> DespesaResponse.de(d, solicitanteId))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public DespesaResponse buscar(Long casaId, Long despesaId) {
-        return DespesaResponse.de(buscarDespesa(casaId, despesaId));
+    public DespesaResponse buscar(Long casaId, Long despesaId, Long solicitanteId) {
+        return DespesaResponse.de(despesaVisivel(casaId, despesaId, solicitanteId), solicitanteId);
     }
 
-    /** Só é possível excluir se ninguém registrou pagamento ainda (evita perder histórico de dinheiro). */
+    /** Só quem pagou exclui, e só se ninguém registrou pagamento ainda (evita perder histórico de dinheiro). */
     @Transactional
-    public void excluir(Long casaId, Long despesaId) {
-        Despesa despesa = buscarDespesa(casaId, despesaId);
+    public void excluir(Long casaId, Long despesaId, Long solicitanteId) {
+        Despesa despesa = despesaVisivel(casaId, despesaId, solicitanteId);
+        exigirPagador(despesa, solicitanteId);
         boolean haPagamentos = despesa.getDivisoes().stream()
                 .anyMatch(d -> !d.isParteDoPagador() && d.getStatus() == StatusDivisao.PAGA);
         if (haPagamentos) {
@@ -99,9 +107,10 @@ public class DespesaService {
 
     /** Cobra de uma vez todas as partes em aberto de uma despesa. */
     @Transactional
-    public DespesaResponse cobrarTodos(Long casaId, Long despesaId, LocalDate vencimento) {
+    public DespesaResponse cobrarTodos(Long casaId, Long despesaId, LocalDate vencimento, Long solicitanteId) {
         validarVencimento(vencimento);
-        Despesa despesa = buscarDespesa(casaId, despesaId);
+        Despesa despesa = despesaVisivel(casaId, despesaId, solicitanteId);
+        exigirPagador(despesa, solicitanteId);
         List<Divisao> emAberto = despesa.getDivisoes().stream()
                 .filter(d -> !d.isParteDoPagador() && d.getStatus() != StatusDivisao.PAGA)
                 .toList();
@@ -109,13 +118,13 @@ public class DespesaService {
             throw new RegraDeNegocioException("Não há valores em aberto nesta despesa.");
         }
         emAberto.forEach(d -> d.cobrar(LocalDate.now(), vencimento));
-        return DespesaResponse.de(despesa);
+        return DespesaResponse.de(despesa, solicitanteId);
     }
 
     @Transactional
-    public DivisaoResponse cobrar(Long divisaoId, LocalDate vencimento) {
+    public DivisaoResponse cobrar(Long divisaoId, LocalDate vencimento, Long solicitanteId) {
         validarVencimento(vencimento);
-        Divisao divisao = buscarDivisao(divisaoId);
+        Divisao divisao = divisaoDoPagador(divisaoId, solicitanteId);
         if (divisao.isParteDoPagador()) {
             throw new RegraDeNegocioException("A parte de quem pagou não é cobrada.");
         }
@@ -127,8 +136,8 @@ public class DespesaService {
     }
 
     @Transactional
-    public DivisaoResponse registrarPagamento(Long divisaoId) {
-        Divisao divisao = buscarDivisao(divisaoId);
+    public DivisaoResponse registrarPagamento(Long divisaoId, Long solicitanteId) {
+        Divisao divisao = divisaoDoPagador(divisaoId, solicitanteId);
         if (divisao.getStatus() == StatusDivisao.PAGA) {
             throw new RegraDeNegocioException("Esta parte já foi paga.");
         }
@@ -141,6 +150,38 @@ public class DespesaService {
     private Despesa buscarDespesa(Long casaId, Long despesaId) {
         return despesas.findByIdAndCasaId(despesaId, casaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Despesa", despesaId));
+    }
+
+    /** A despesa só existe para quem pagou ou participa; para os demais, é como se não existisse (404). */
+    private Despesa despesaVisivel(Long casaId, Long despesaId, Long solicitanteId) {
+        Despesa despesa = buscarDespesa(casaId, despesaId);
+        if (!despesa.envolve(solicitanteId)) {
+            throw new RecursoNaoEncontradoException("Despesa", despesaId);
+        }
+        return despesa;
+    }
+
+    private void exigirPagador(Despesa despesa, Long solicitanteId) {
+        if (!despesa.getPagador().getId().equals(solicitanteId)) {
+            throw new AcessoNegadoException("Só quem pagou a despesa pode fazer isso.");
+        }
+    }
+
+    /**
+     * Cobrar e confirmar recebimento são ações de quem pagou. O devedor recebe 403;
+     * quem não tem relação nenhuma com a dívida nem fica sabendo que ela existe (404).
+     */
+    private Divisao divisaoDoPagador(Long divisaoId, Long solicitanteId) {
+        Divisao divisao = buscarDivisao(divisaoId);
+        boolean ehPagador = divisao.getDespesa().getPagador().getId().equals(solicitanteId);
+        boolean ehDevedor = divisao.getDevedor().getId().equals(solicitanteId);
+        if (!ehPagador && !ehDevedor) {
+            throw new RecursoNaoEncontradoException("Divisão", divisaoId);
+        }
+        if (!ehPagador) {
+            throw new AcessoNegadoException("Só quem pagou a despesa pode cobrar ou confirmar o recebimento.");
+        }
+        return divisao;
     }
 
     private Divisao buscarDivisao(Long divisaoId) {

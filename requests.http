@@ -1,76 +1,63 @@
 ### Requisições de exemplo para o HTTP Client do IntelliJ.
-### Suba a aplicação e clique no ícone verde ao lado de cada requisição.
-### (Os ids abaixo assumem um banco vazio; ajuste se necessário.)
+### Rode na ordem: o login guarda o token e as outras requisições usam ele.
+### Use um banco vazio (apague a pasta data/) ou troque os e-mails.
 
-### 1. Criar a casa
-POST http://localhost:8080/api/casas
+### 1. Abrir uma casa nova (você vira o administrador)
+POST http://localhost:8080/api/auth/cadastro/casa
 Content-Type: application/json
 
-{ "nome": "Casa da Vila" }
+{ "nomeCasa": "Casa da Vila", "nome": "Nathan", "email": "nathan@exemplo.com", "senha": "senha1234" }
 
-### 2. Adicionar moradores (ids 1 a 4)
-POST http://localhost:8080/api/casas/1/moradores
+> {% client.global.set("token", response.body.token); client.global.set("casaId", response.body.casaId); %}
+
+### 2. Ver meu perfil e a casa
+GET http://localhost:8080/api/eu
+Authorization: Bearer {{token}}
+
+### 3. Ver o código de convite (só o administrador)
+GET http://localhost:8080/api/casas/{{casaId}}/convite
+Authorization: Bearer {{token}}
+
+### 4. Outro morador entra com o código (troque CASA-XXXXXX)
+POST http://localhost:8080/api/auth/cadastro/convite
 Content-Type: application/json
 
-{ "nome": "Nathan" }
+{ "codigoConvite": "CASA-XXXXXX", "nome": "Larissa", "email": "larissa@exemplo.com", "senha": "senha1234" }
+
+### 5. Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "email": "nathan@exemplo.com", "senha": "senha1234" }
+
+> {% client.global.set("token", response.body.token); %}
+
+### 6. Registrar despesa (quem está logado é o pagador; participantesIds = ids dos moradores)
+POST http://localhost:8080/api/casas/{{casaId}}/despesas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "descricao": "Mercado", "valorTotal": 200.00, "data": "2026-10-04", "participantesIds": [1, 2] }
+
+### 7. Minhas despesas do mês
+GET http://localhost:8080/api/casas/{{casaId}}/despesas?mes=2026-10
+Authorization: Bearer {{token}}
+
+### 8. Meu resumo e minhas dívidas
+GET http://localhost:8080/api/eu/resumo
+Authorization: Bearer {{token}}
 
 ###
-POST http://localhost:8080/api/casas/1/moradores
-Content-Type: application/json
+GET http://localhost:8080/api/eu/dividas
+Authorization: Bearer {{token}}
 
-{ "nome": "Larissa" }
-
-###
-POST http://localhost:8080/api/casas/1/moradores
-Content-Type: application/json
-
-{ "nome": "Matheus" }
-
-###
-POST http://localhost:8080/api/casas/1/moradores
-Content-Type: application/json
-
-{ "nome": "Camilly" }
-
-### 3. Nathan foi ao mercado: despesa dividida entre os 4
-POST http://localhost:8080/api/casas/1/despesas
-Content-Type: application/json
-
-{
-  "descricao": "Mercado da semana",
-  "valorTotal": 200.00,
-  "pagadorId": 1,
-  "participantesIds": [1, 2, 3, 4]
-}
-
-### 4. Pizza só entre Nathan, Larissa e Camilly
-POST http://localhost:8080/api/casas/1/despesas
-Content-Type: application/json
-
-{
-  "descricao": "Pizza de sexta",
-  "valorTotal": 90.00,
-  "pagadorId": 1,
-  "participantesIds": [1, 2, 4]
-}
-
-### 5. Quem deve quanto a quem
-GET http://localhost:8080/api/casas/1/resumo
-
-### 6. Despesas do mês
-GET http://localhost:8080/api/casas/1/despesas?mes=2026-10
-
-### 7. Cobrar a parte da Larissa (divisão 2) com prazo
-POST http://localhost:8080/api/divisoes/2/cobranca
+### 9. Cobrar uma dívida (só o pagador) e confirmar pagamento
+POST http://localhost:8080/api/divisoes/1/cobranca
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "vencimento": "2026-10-10" }
 
-### 8. Confirmar que a Larissa pagou
-POST http://localhost:8080/api/divisoes/2/pagamento
-
-### 9. Erro de validação (valor negativo): esperado 400 com os campos
-POST http://localhost:8080/api/casas/1/despesas
-Content-Type: application/json
-
-{ "descricao": "", "valorTotal": -5, "pagadorId": 1, "participantesIds": [] }
+###
+POST http://localhost:8080/api/divisoes/1/pagamento
+Authorization: Bearer {{token}}

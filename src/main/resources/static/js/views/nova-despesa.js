@@ -5,19 +5,18 @@ import { brl, dividirEmCentavos, hojeISO, lerValor } from '../format.js';
 import { moradoresAtivos } from './moradores.js';
 
 const SUGESTOES = ['Mercado', 'Pizza', 'Conta de luz', 'Internet', 'Gás', 'Produtos de limpeza'];
-const CHAVE_ULTIMO_PAGADOR = 'republica.ultimoPagador';
 
 /** Formulário de nova despesa, com prévia ao vivo de quanto cada um paga. */
 export function abrirNovaDespesa({ state, recarregar }) {
     const moradores = moradoresAtivos(state);
     const casaId = state.casa.id;
 
-    const ultimo = Number(localStorage.getItem(CHAVE_ULTIMO_PAGADOR));
+    // quem paga é sempre quem está logado
     const form = {
         descricao: '',
         valorTexto: '',
         data: hojeISO(),
-        pagadorId: moradores.some((m) => m.id === ultimo) ? ultimo : moradores[0].id,
+        pagadorId: state.eu.id,
         participantes: new Set(moradores.map((m) => m.id)),
     };
 
@@ -44,7 +43,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
             conteudo = algumDevedor
                 ? [`${participantes.length} pessoas · `, h('strong', {}, brl(partes[0] / 100)),
                     igual ? ' por pessoa' : ' por pessoa (centavos arredondados)', h('br'),
-                    h('strong', {}, pagador.nome), ' vai receber ', h('strong', {}, brl(aReceber))]
+                    h('strong', {}, 'Você'), ' vai receber ', h('strong', {}, brl(aReceber))]
                 : 'Marque pelo menos uma pessoa além de quem pagou.';
         }
         previa.replaceChildren(...[conteudo].flat());
@@ -66,12 +65,6 @@ export function abrirNovaDespesa({ state, recarregar }) {
 
     const campoData = h('input', { type: 'date', value: form.data, max: hojeISO(),
         oninput: (e) => { form.data = e.target.value || hojeISO(); } });
-
-    const pagadores = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Quem pagou' }, moradores.map((m) =>
-        h('label', { class: 'chip' },
-            h('input', { type: 'radio', name: 'pagador', checked: m.id === form.pagadorId,
-                onchange: () => { form.pagadorId = m.id; calcular(); } }),
-            avatar(m, true), m.nome)));
 
     const caixas = new Map();
     const participantes = h('div', { class: 'chips' }, moradores.map((m) => {
@@ -99,10 +92,8 @@ export function abrirNovaDespesa({ state, recarregar }) {
                 descricao: form.descricao.trim(),
                 valorTotal: lerValor(form.valorTexto),
                 data: form.data,
-                pagadorId: form.pagadorId,
                 participantesIds: [...form.participantes],
             });
-            localStorage.setItem(CHAVE_ULTIMO_PAGADOR, String(form.pagadorId));
             fechar();
             toast('Despesa registrada e dividida');
             await recarregar();
@@ -116,7 +107,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
     const corpo = h('form', { onsubmit: (e) => { e.preventDefault(); if (!botaoSalvar.disabled) salvar(); } },
         h('div', { class: 'field' }, h('label', {}, 'Valor total (R$)'), campoValor),
         h('div', { class: 'field' }, h('label', {}, 'O que foi?'), campoDescricao, sugestoes),
-        h('div', { class: 'field' }, h('span', { class: 'label' }, 'Quem pagou?'), pagadores),
+        h('p', { class: 'dica', style: 'margin-bottom:.9rem' }, 'Você pagou esta despesa. Marque abaixo quem divide com você.'),
         h('div', { class: 'field' },
             h('div', { class: 'card-head', style: 'margin:0' },
                 h('span', { class: 'label' }, 'Quem participa?'),

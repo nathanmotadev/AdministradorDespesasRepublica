@@ -87,11 +87,11 @@ class CenariosDaRepublicaTest {
         DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
         Long divisaoDaLarissa = divisaoDe(mercado, larissa).id();
 
-        DivisaoResponse cobrada = despesaService.cobrar(divisaoDaLarissa, LocalDate.now().plusDays(5));
+        DivisaoResponse cobrada = despesaService.cobrar(divisaoDaLarissa, LocalDate.now().plusDays(5), nathan.id());
         assertThat(cobrada.status()).isEqualTo(StatusDivisao.COBRADA);
         assertThat(cobrada.vencimento()).isEqualTo(LocalDate.now().plusDays(5));
 
-        DivisaoResponse paga = despesaService.registrarPagamento(divisaoDaLarissa);
+        DivisaoResponse paga = despesaService.registrarPagamento(divisaoDaLarissa, nathan.id());
         assertThat(paga.status()).isEqualTo(StatusDivisao.PAGA);
         assertThat(acertos()).noneMatch(a -> a.de().id().equals(larissa.id()));
     }
@@ -100,7 +100,7 @@ class CenariosDaRepublicaTest {
     void naoCobraAParteDeQuemPagou() {
         DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
 
-        assertThatThrownBy(() -> despesaService.cobrar(divisaoDe(mercado, nathan).id(), null))
+        assertThatThrownBy(() -> despesaService.cobrar(divisaoDe(mercado, nathan).id(), null, nathan.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
     }
 
@@ -122,9 +122,9 @@ class CenariosDaRepublicaTest {
     @Test
     void despesaComPagamentoNaoPodeSerExcluida() {
         DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
-        despesaService.registrarPagamento(divisaoDe(mercado, larissa).id());
+        despesaService.registrarPagamento(divisaoDe(mercado, larissa).id(), nathan.id());
 
-        assertThatThrownBy(() -> despesaService.excluir(casaId, mercado.id()))
+        assertThatThrownBy(() -> despesaService.excluir(casaId, mercado.id(), nathan.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
     }
 
@@ -140,8 +140,9 @@ class CenariosDaRepublicaTest {
 
     private DespesaResponse despesa(String descricao, String valor, MoradorResponse pagador, MoradorResponse... participantes) {
         List<Long> ids = java.util.Arrays.stream(participantes).map(MoradorResponse::id).toList();
+        // quem paga é sempre quem registra
         return despesaService.registrar(casaId,
-                new DespesaRequest(descricao, new BigDecimal(valor), null, pagador.id(), ids));
+                new DespesaRequest(descricao, new BigDecimal(valor), null, ids), pagador.id());
     }
 
     private List<AcertoResponse> acertos() {

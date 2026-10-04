@@ -29,6 +29,16 @@ public class ApiExceptionHandler {
         return resposta(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), null);
     }
 
+    @ExceptionHandler(AcessoNegadoException.class)
+    public ResponseEntity<Erro> acessoNegado(AcessoNegadoException ex) {
+        return resposta(HttpStatus.FORBIDDEN, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(CredenciaisInvalidasException.class)
+    public ResponseEntity<Erro> credenciaisInvalidas(CredenciaisInvalidasException ex) {
+        return resposta(HttpStatus.UNAUTHORIZED, ex.getMessage(), null);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Erro> validacao(MethodArgumentNotValidException ex) {
         Map<String, String> campos = new LinkedHashMap<>();

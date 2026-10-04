@@ -16,6 +16,10 @@ public class Morador {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    /** Quem criou a casa: gerencia moradores, convite e nome da casa. */
+    @Column(name = "administrador", nullable = false, columnDefinition = "boolean default false")
+    private boolean admin;
+
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private Casa casa;
 
@@ -45,6 +49,14 @@ public class Morador {
 
     public void setAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public boolean isAdmin() {
+        return admin;
+    }
+
+    public void setAdmin(boolean admin) {
+        this.admin = admin;
     }
 
     public Casa getCasa() {

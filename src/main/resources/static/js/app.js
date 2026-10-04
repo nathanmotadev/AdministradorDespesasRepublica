@@ -1,143 +1,125 @@
-// Ponto de entrada: carrega os dados da API e monta a tela.
-import { api } from './api.js';
-import { abrirModal, h, toast } from './ui.js';
+// Ponto de entrada: decide entre a tela de entrada e o app, carrega os dados da API e monta a tela.
+import { api, definirAoExpirar, sessao } from './api.js';
+import { h, toast } from './ui.js';
 import { mesAtual } from './format.js';
-import { viewAcertos } from './views/acertos.js';
+import { avatar, icone, logo } from './components.js';
+import { renderAuth } from './views/auth.js';
+import { viewInicio, viewLateral } from './views/inicio.js';
 import { viewDespesas } from './views/despesas.js';
-import { moradoresAtivos, viewMoradores } from './views/moradores.js';
+import { viewCasa } from './views/casa.js';
+import { moradoresAtivos } from './views/moradores.js';
 import { abrirNovaDespesa } from './views/nova-despesa.js';
-import { executar } from './components.js'
 
-const CHAVE_CASA = 'republica.casaId';
+const ABAS = [
+    { id: 'inicio', rotulo: 'Início', icone: 'casa' },
+    { id: 'despesas', rotulo: 'Despesas', icone: 'recibo' },
+    { id: 'casa', rotulo: 'Casa', icone: 'pessoas' },
+];
 
-const state = {
-    casas: [],
-    casaId: Number(localStorage.getItem(CHAVE_CASA)) || null,
-    casa: null,
-    resumo: null,
-    despesas: [],
+const estadoInicial = () => ({
+    eu: null,          // o morador logado
+    casa: null,        // a casa dele, com os moradores
+    resumo: null,      // quanto devo / tenho a receber
+    dividas: null,     // dívidas em aberto em que participo
+    despesas: [],      // despesas do mês em que pago ou participo
     mes: mesAtual(),
-};
+    aba: 'inicio',
+    abaDividas: null,
+});
 
-const ctx = { state, recarregar };
+const state = estadoInicial();
+const ctx = { state, recarregar, redesenhar: renderizar, irPara, sair };
+
 const topbar = document.getElementById('topbar');
 const app = document.getElementById('app');
+const nav = document.getElementById('nav');
 
 async function iniciar() {
+    definirAoExpirar(mostrarEntrada);
+    if (!sessao.token()) return mostrarEntrada();
     try {
-        state.casas = await api.listarCasas();
-        if (state.casas.length === 0) return renderizarBoasVindas();
-        if (!state.casas.some((c) => c.id === state.casaId)) state.casaId = state.casas[0].id;
         await recarregar();
     } catch (erro) {
-        app.replaceChildren(h('div', { class: 'card vazio full' },
+        if (!sessao.token()) return; // a sessão expirou e a tela de entrada já foi mostrada
+        app.replaceChildren(h('div', { class: 'card vazio' },
             h('strong', {}, 'Não consegui falar com o servidor'), erro.message));
     }
 }
 
 /** Busca de novo tudo o que a tela mostra e redesenha. Chamado depois de qualquer alteração. */
 export async function recarregar() {
-    localStorage.setItem(CHAVE_CASA, String(state.casaId));
-    const [casas, casa, resumo, despesas] = await Promise.all([
-        api.listarCasas(),
-        api.buscarCasa(state.casaId),
-        api.resumo(state.casaId),
-        api.listarDespesas(state.casaId, state.mes),
+    const perfil = await api.eu();
+    const [resumo, dividas, despesas] = await Promise.all([
+        api.meuResumo(),
+        api.minhasDividas(),
+        api.listarDespesas(perfil.casa.id, state.mes),
     ]);
-    Object.assign(state, { casas, casa, resumo, despesas });
+    Object.assign(state, { eu: perfil.morador, casa: perfil.casa, resumo, dividas, despesas });
     renderizar();
 }
 
 // ---------- telas ----------
 
+function mostrarEntrada() {
+    Object.assign(state, estadoInicial());
+    renderAuth({
+        topbar, app, nav,
+        aoEntrar: async (resposta) => {
+            sessao.salvar(resposta.token);
+            try {
+                await recarregar();
+            } catch (erro) {
+                toast(erro.message, 'erro');
+            }
+        },
+    });
+}
+
 function renderizar() {
+    topbar.replaceChildren(
+        logo(),
+        h('span', { class: 'casa-nome' }, state.casa.nome),
+        h('span', { class: 'spacer' }),
+        h('nav', { class: 'nav-desktop', 'aria-label': 'Seções' }, ABAS.map((aba) => botaoAba(aba, false))),
+        h('div', { class: 'perfil' }, avatar(state.eu), h('span', { class: 'nome' }, state.eu.nome)));
+
+    nav.replaceChildren(...ABAS.map((aba) => botaoAba(aba, true)));
 
     const podeCriar = moradoresAtivos(state).length >= 2;
+    app.className = `container${state.aba === 'inicio' ? ' com-lateral' : ''}`;
 
-    topbar.replaceChildren(
-        h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, '⌂'), 'República'),
-        h('select', { class: 'casa-select', 'aria-label': 'Casa', onchange: trocarCasa },
-            state.casas.map((c) => h('option', { value: c.id, selected: c.id === state.casaId }, c.nome))),
-        h('button', { class: 'btn small', type: 'button', onclick: abrirNovaCasa }, '+ Casa'),
-        h('button', { class: 'btn small', type: 'button', onclick: abrirRenomearCasa }, 'Renomear'));
+    if (state.aba === 'inicio') {
+        app.replaceChildren(viewInicio(ctx), h('aside', { class: 'lateral' }, viewLateral(ctx)));
+    } else if (state.aba === 'despesas') {
+        app.replaceChildren(viewDespesas(ctx));
+    } else {
+        app.replaceChildren(viewCasa(ctx));
+    }
 
-    app.replaceChildren(
-        viewDespesas(ctx),
-        h('aside', { class: 'sidebar' }, viewAcertos(ctx), viewMoradores(ctx)),
-        h('button', { class: 'btn primary fab', type: 'button', disabled: !podeCriar,
-            onclick: () => abrirNovaDespesa(ctx) }, '+ Despesa'));
-}
-
-function renderizarBoasVindas() {
-    topbar.replaceChildren(h('div', { class: 'brand' },
-        h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, '⌂'), 'República'));
-
-    const campo = h('input', { type: 'text', maxlength: 80, placeholder: 'Ex.: Casa da Vila', autocomplete: 'off',
-        'aria-label': 'Nome da casa' });
-    app.replaceChildren(h('form', { class: 'card onboarding', onsubmit: (e) => criarCasa(e, campo) },
-        h('h1', {}, 'Bem-vindo à República'),
-        h('p', { class: 'muted', style: 'margin-bottom:1rem' },
-            'Divida contas com quem mora com você e saiba, a qualquer momento, quem deve quanto a quem. '
-            + 'Comece dando um nome para a sua casa.'),
-        h('div', { class: 'field' }, campo),
-        h('button', { class: 'btn primary', type: 'submit' }, 'Criar casa')));
-    campo.focus();
-}
-
-// ---------- ações ----------
-
-async function trocarCasa(evento) {
-    state.casaId = Number(evento.target.value);
-    await recarregar();
-}
-
-async function criarCasa(evento, campo) {
-    evento.preventDefault();
-    const nome = campo.value.trim();
-    if (!nome) return;
-    try {
-        const casa = await api.criarCasa(nome);
-        state.casaId = casa.id;
-        await recarregar();
-    } catch (erro) {
-        toast(erro.message, 'erro');
+    if (state.aba !== 'casa') {
+        app.append(h('button', { class: 'btn accent fab', type: 'button', disabled: !podeCriar,
+            onclick: () => abrirNovaDespesa(ctx) }, icone('mais', 18), 'Despesa'));
     }
 }
 
-function abrirNovaCasa() {
-    const campo = h('input', { type: 'text', maxlength: 80, placeholder: 'Nome da casa', autocomplete: 'off',
-        'aria-label': 'Nome da casa' });
-    const enviar = async (evento) => {
-        await criarCasa(evento, campo);
-        fechar();
-    };
-    const corpo = h('form', { onsubmit: enviar }, h('div', { class: 'field' }, campo));
-    const fechar = abrirModal({
-        titulo: 'Nova casa',
-        corpo,
-        rodape: [
-            h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'),
-            h('button', { class: 'btn primary', type: 'button', onclick: enviar }, 'Criar'),
-        ],
-    });
+function botaoAba(aba, comIcone) {
+    const ativa = state.aba === aba.id;
+    return h('button', {
+        class: `tab${ativa ? ' ativo' : ''}`, type: 'button',
+        'aria-current': ativa ? 'page' : null,
+        onclick: () => irPara(aba.id),
+    }, comIcone ? icone(aba.icone) : null, aba.rotulo);
 }
-function abrirRenomearCasa() {
-    const atual = state.casas.find((c) => c.id === state.casaId);
-    const campo = h('input', { type: 'text', maxlength: 80, value: atual.nome, 'aria-label': 'Novo nome da casa' });
-    const enviar = async (evento) => {
-        evento.preventDefault();
-        const nome = campo.value.trim();
-        if (!nome) return;
-        const ok = await executar(() => api.renomearCasa(state.casaId, nome), 'Casa renomeada');
-        if (ok) { fechar(); await recarregar(); }
-    };
-    const fechar = abrirModal({
-        titulo: 'Renomear casa',
-        corpo: h('form', { onsubmit: enviar }, h('div', { class: 'field' }, campo)),
-        rodape: [
-            h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'),
-            h('button', { class: 'btn primary', type: 'button', onclick: enviar }, 'Salvar'),
-        ],
-    });
+
+function irPara(aba) {
+    state.aba = aba;
+    renderizar();
+    window.scrollTo({ top: 0 });
 }
+
+function sair() {
+    sessao.sair();
+    mostrarEntrada();
+}
+
 iniciar();

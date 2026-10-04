@@ -4,8 +4,10 @@ import { avatar, executar } from '../components.js';
 
 export const moradoresAtivos = (state) => state.casa.moradores.filter((m) => m.ativo);
 
+/** Quem mora na casa. Só o administrador adiciona e remove moradores. */
 export function viewMoradores({ state, recarregar }) {
     const casaId = state.casa.id;
+    const souAdmin = state.eu.admin;
 
     async function adicionar(evento) {
         evento.preventDefault();
@@ -33,10 +35,14 @@ export function viewMoradores({ state, recarregar }) {
         moradoresAtivos(state).map((morador) => h('div', { class: 'morador' },
             avatar(morador),
             h('span', { class: 'nome' }, morador.nome),
-            h('button', { class: 'icon-btn', type: 'button', title: 'Remover da casa',
-                'aria-label': `Remover ${morador.nome}`, onclick: () => remover(morador) }, '×'))),
-        h('form', { class: 'inline-form', onsubmit: adicionar },
-            h('input', { type: 'text', name: 'nome', placeholder: 'Nome do morador', maxlength: 80,
-                autocomplete: 'off', 'aria-label': 'Nome do novo morador' }),
-            h('button', { class: 'btn', type: 'submit' }, 'Adicionar')));
+            morador.id === state.eu.id ? h('span', { class: 'dica' }, 'você')
+                : morador.admin ? h('span', { class: 'badge admin' }, 'admin') : null,
+            souAdmin && morador.id !== state.eu.id && h('button', { class: 'icon-btn', type: 'button',
+                title: 'Remover da casa', 'aria-label': `Remover ${morador.nome}`, onclick: () => remover(morador) }, '×'))),
+        souAdmin && h('form', { class: 'inline-form', onsubmit: adicionar },
+            h('input', { type: 'text', name: 'nome', placeholder: 'Morador sem conta', maxlength: 80,
+                autocomplete: 'off', 'aria-label': 'Nome de um morador sem conta' }),
+            h('button', { class: 'btn', type: 'submit' }, 'Adicionar')),
+        souAdmin && h('p', { class: 'dica', style: 'margin-top:.5rem' },
+            'Quem tem celular entra pelo código de convite. Adicione aqui só quem não vai usar o app.'));
 }
