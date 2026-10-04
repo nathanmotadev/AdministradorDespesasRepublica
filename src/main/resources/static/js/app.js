@@ -6,6 +6,7 @@ import { viewAcertos } from './views/acertos.js';
 import { viewDespesas } from './views/despesas.js';
 import { moradoresAtivos, viewMoradores } from './views/moradores.js';
 import { abrirNovaDespesa } from './views/nova-despesa.js';
+import { executar } from './components.js'
 
 const CHAVE_CASA = 'republica.casaId';
 
@@ -50,13 +51,15 @@ export async function recarregar() {
 // ---------- telas ----------
 
 function renderizar() {
+
     const podeCriar = moradoresAtivos(state).length >= 2;
 
     topbar.replaceChildren(
         h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, '⌂'), 'República'),
         h('select', { class: 'casa-select', 'aria-label': 'Casa', onchange: trocarCasa },
             state.casas.map((c) => h('option', { value: c.id, selected: c.id === state.casaId }, c.nome))),
-        h('button', { class: 'btn small', type: 'button', onclick: abrirNovaCasa }, '+ Casa'));
+        h('button', { class: 'btn small', type: 'button', onclick: abrirNovaCasa }, '+ Casa'),
+        h('button', { class: 'btn small', type: 'button', onclick: abrirRenomearCasa }, 'Renomear'));
 
     app.replaceChildren(
         viewDespesas(ctx),
@@ -118,5 +121,23 @@ function abrirNovaCasa() {
         ],
     });
 }
-
+function abrirRenomearCasa() {
+    const atual = state.casas.find((c) => c.id === state.casaId);
+    const campo = h('input', { type: 'text', maxlength: 80, value: atual.nome, 'aria-label': 'Novo nome da casa' });
+    const enviar = async (evento) => {
+        evento.preventDefault();
+        const nome = campo.value.trim();
+        if (!nome) return;
+        const ok = await executar(() => api.renomearCasa(state.casaId, nome), 'Casa renomeada');
+        if (ok) { fechar(); await recarregar(); }
+    };
+    const fechar = abrirModal({
+        titulo: 'Renomear casa',
+        corpo: h('form', { onsubmit: enviar }, h('div', { class: 'field' }, campo)),
+        rodape: [
+            h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'),
+            h('button', { class: 'btn primary', type: 'button', onclick: enviar }, 'Salvar'),
+        ],
+    });
+}
 iniciar();

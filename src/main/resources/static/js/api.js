@@ -22,6 +22,7 @@ export const api = {
     criarCasa: (nome) => request('/casas', { method: 'POST', body: { nome } }),
     buscarCasa: (id) => request(`/casas/${id}`),
     resumo: (casaId) => request(`/casas/${casaId}/resumo`),
+    renomearCasa: (id, nome) => request(`/casas/${id}`, { method: 'PUT', body: { nome } }),
 
     adicionarMorador: (casaId, nome) =>
         request(`/casas/${casaId}/moradores`, { method: 'POST', body: { nome } }),

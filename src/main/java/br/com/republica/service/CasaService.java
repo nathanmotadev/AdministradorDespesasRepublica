@@ -45,6 +45,15 @@ public class CasaService {
     }
 
     @Transactional
+    public CasaResponse renomear(Long casaId, CasaRequest request){
+        Casa casa = buscarEntidade(casaId);
+        casa.setNome(request.nome().trim());
+        return CasaResponse.de(casa);
+
+
+    }
+
+    @Transactional
     public MoradorResponse adicionarMorador(Long casaId, MoradorRequest request) {
         Casa casa = buscarEntidade(casaId);
         String nome = request.nome().trim();
