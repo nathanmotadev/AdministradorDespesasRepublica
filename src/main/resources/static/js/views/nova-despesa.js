@@ -2,17 +2,28 @@ import { api } from '../api.js';
 import { abrirModal, h, toast } from '../ui.js';
 import { avatar, centavos } from '../components.js';
 import { brl, dividirEmCentavos, hojeISO, lerValor } from '../format.js';
-import { moradoresAtivos } from './moradores.js';
 
 const SUGESTOES = ['Mercado', 'Pizza', 'Conta de luz', 'Internet', 'Gás', 'Produtos de limpeza'];
 
-/** Formulário de nova despesa, com prévia ao vivo de quanto cada um paga. */
-export function abrirNovaDespesa({ state, recarregar }) {
-    const moradores = moradoresAtivos(state);
+/**
+ * Formulário de despesa, com prévia ao vivo de quanto cada um paga.
+ * Com {@code despesa}, abre já preenchido para editar uma despesa lançada.
+ */
+export function abrirNovaDespesa({ state, recarregar }, despesa = null) {
+    const editando = despesa != null;
+    // ao editar, quem já participava continua na lista mesmo que tenha saído da casa
+    const moradores = state.casa.moradores.filter((m) => m.ativo || despesa?.participantesIds.includes(m.id));
     const casaId = state.casa.id;
 
     // quem paga é sempre quem está logado
-    const form = {
+    const form = editando ? {
+        descricao: despesa.descricao,
+        valorTexto: String(despesa.valorTotal).replace('.', ','),
+        data: despesa.data,
+        pagadorId: state.eu.id,
+        participantes: new Set(despesa.participantesIds),
+        separar: despesa.cobrarSeparado,
+    } : {
         descricao: '',
         valorTexto: '',
         data: hojeISO(),
@@ -20,6 +31,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
         participantes: new Set(moradores.map((m) => m.id)),
         separar: false,
     };
+    const algumPago = editando && despesa.divisoes.some((d) => !d.parteDoPagador && d.status === 'PAGA');
     const grupoDe = (m) => m.responsavelId ?? m.id;
     const euGrupo = grupoDe(state.eu);
     const haAgrupados = moradores.some((m) => m.responsavelId);
@@ -27,7 +39,8 @@ export function abrirNovaDespesa({ state, recarregar }) {
     // ---------- prévia ----------
     const previa = h('div', { class: 'previa', 'aria-live': 'polite' });
     const erro = h('p', { class: 'field-error', role: 'alert' });
-    const botaoSalvar = h('button', { class: 'btn primary', type: 'button', onclick: salvar }, 'Registrar despesa');
+    const botaoSalvar = h('button', { class: 'btn primary', type: 'button', onclick: salvar },
+        editando ? 'Salvar alterações' : 'Registrar despesa');
 
     function calcular() {
         const valor = lerValor(form.valorTexto);
@@ -56,7 +69,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
     }
 
     // ---------- campos ----------
-    const campoDescricao = h('input', { type: 'text', maxlength: 120, placeholder: 'Ex.: Mercado da semana',
+    const campoDescricao = h('input', { type: 'text', maxlength: 120, placeholder: 'Ex.: Mercado da semana', value: form.descricao,
         autocomplete: 'off', oninput: (e) => { form.descricao = e.target.value; calcular(); } });
 
     const sugestoes = h('div', { class: 'chips' }, SUGESTOES.map((texto) =>
@@ -65,6 +78,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
         } }, texto)));
 
     const campoValor = h('input', { type: 'text', class: 'valor-input', inputmode: 'decimal', placeholder: '0,00',
+        value: form.valorTexto,
         autocomplete: 'off', 'aria-label': 'Valor total em reais',
         oninput: (e) => { form.valorTexto = e.target.value; calcular(); } });
 
@@ -73,7 +87,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
 
     const caixas = new Map();
     const participantes = h('div', { class: 'chips' }, moradores.map((m) => {
-        const caixa = h('input', { type: 'checkbox', checked: true,
+        const caixa = h('input', { type: 'checkbox', checked: form.participantes.has(m.id),
             onchange: (e) => {
                 if (e.target.checked) form.participantes.add(m.id); else form.participantes.delete(m.id);
                 calcular();
@@ -93,15 +107,17 @@ export function abrirNovaDespesa({ state, recarregar }) {
         erro.textContent = '';
         botaoSalvar.disabled = true;
         try {
-            await api.criarDespesa(casaId, {
+            const dados = {
                 descricao: form.descricao.trim(),
                 valorTotal: lerValor(form.valorTexto),
                 data: form.data,
                 participantesIds: [...form.participantes],
                 cobrarSeparado: form.separar,
-            });
+            };
+            if (editando) await api.editarDespesa(casaId, despesa.id, dados);
+            else await api.criarDespesa(casaId, dados);
             fechar();
-            toast('Despesa registrada e dividida');
+            toast(editando ? 'Despesa atualizada' : 'Despesa registrada e dividida');
             await recarregar();
         } catch (e) {
             const detalhes = Object.values(e.campos ?? {});
@@ -122,15 +138,17 @@ export function abrirNovaDespesa({ state, recarregar }) {
                     h('button', { type: 'button', class: 'btn small ghost', onclick: () => marcarTodos(false) }, 'Limpar'))),
             participantes),
         haAgrupados && h('label', { class: 'chip simple', style: 'margin-bottom:.9rem' },
-            h('input', { type: 'checkbox', onchange: (e) => { form.separar = e.target.checked; } }),
+            h('input', { type: 'checkbox', checked: form.separar, onchange: (e) => { form.separar = e.target.checked; } }),
             'Cobrar cada um separado (ignorar quem paga junto)'),
         h('div', { class: 'field' }, h('label', {}, 'Data'), campoData),
+        algumPago && h('p', { class: 'dica', style: 'margin-bottom:.9rem' },
+            'Quem já pagou continua quitado se o valor dele não mudar. Se mudar, a parte volta a ficar em aberto.'),
         previa, erro,
         h('button', { type: 'submit', hidden: true }));
 
     calcular();
     const fechar = abrirModal({
-        titulo: 'Nova despesa',
+        titulo: editando ? 'Editar despesa' : 'Nova despesa',
         corpo,
         rodape: [h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'), botaoSalvar],
     });

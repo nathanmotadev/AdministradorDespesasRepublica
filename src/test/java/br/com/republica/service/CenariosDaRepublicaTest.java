@@ -136,6 +136,51 @@ class CenariosDaRepublicaTest {
                 .isInstanceOf(RegraDeNegocioException.class);
     }
 
+    @Test
+    void editarValorEParticipantesRecalculaADivisao() {
+        DespesaResponse mercado = despesa("Mercado", "250.00", nathan, nathan, larissa);
+
+        DespesaResponse editada = despesaService.editar(casaId, mercado.id(),
+                new DespesaRequest("Mercado do mês", new BigDecimal("90.00"), null,
+                        List.of(nathan.id(), matheus.id(), camilly.id())), nathan.id());
+
+        assertThat(editada.descricao()).isEqualTo("Mercado do mês");
+        assertThat(editada.divisoes()).noneMatch(d -> d.devedor().id().equals(larissa.id()));
+        assertThat(acertos())
+                .extracting(a -> a.de().nome() + ">" + a.para().nome() + ":" + a.valor())
+                .containsExactlyInAnyOrder("Camilly>Nathan:30.00", "Matheus>Nathan:30.00");
+    }
+
+    @Test
+    void editarDepoisDePagoMantemQuemNaoMudouEReabreQuemMudou() {
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
+        despesaService.registrarPagamento(divisaoDe(mercado, larissa).id(), nathan.id());
+
+        // só a descrição muda: a Larissa continua quitada
+        DespesaResponse soDescricao = despesaService.editar(casaId, mercado.id(),
+                new DespesaRequest("Feira", new BigDecimal("200.00"), null,
+                        List.of(nathan.id(), larissa.id(), matheus.id(), camilly.id())), nathan.id());
+        assertThat(divisaoDe(soDescricao, larissa).status()).isEqualTo(StatusDivisao.PAGA);
+
+        // sai a Camilly: a parte da Larissa sobe para 66,67 e volta a ficar em aberto
+        DespesaResponse semCamilly = despesaService.editar(casaId, mercado.id(),
+                new DespesaRequest("Feira", new BigDecimal("200.00"), null,
+                        List.of(nathan.id(), larissa.id(), matheus.id())), nathan.id());
+        assertThat(divisaoDe(semCamilly, larissa).status()).isEqualTo(StatusDivisao.PENDENTE);
+        assertThat(semCamilly.divisoes()).hasSize(3);
+        assertThat(semCamilly.participantesIds()).containsExactlyInAnyOrder(nathan.id(), larissa.id(), matheus.id());
+    }
+
+    @Test
+    void soQuemPagouEditaADespesa() {
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
+
+        assertThatThrownBy(() -> despesaService.editar(casaId, mercado.id(),
+                new DespesaRequest("Mercado", new BigDecimal("10.00"), null, List.of(nathan.id(), larissa.id())),
+                larissa.id()))
+                .isInstanceOf(br.com.republica.exception.AcessoNegadoException.class);
+    }
+
     // ---------- auxiliares ----------
 
     private DespesaResponse despesa(String descricao, String valor, MoradorResponse pagador, MoradorResponse... participantes) {

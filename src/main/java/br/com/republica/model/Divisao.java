@@ -64,6 +64,23 @@ public class Divisao {
         this.pagaEm = hoje;
     }
 
+    /**
+     * Ajusta o valor depois que a despesa foi editada. Se a parte já estava paga e o valor mudou,
+     * ela volta a ficar em aberto para ser acertada de novo (a parte de quem pagou continua paga).
+     */
+    public void alterarValor(BigDecimal novoValor) {
+        if (valor.compareTo(novoValor) == 0) {
+            return;
+        }
+        this.valor = novoValor;
+        if (status == StatusDivisao.PAGA && !isParteDoPagador()) {
+            this.status = StatusDivisao.PENDENTE;
+            this.pagaEm = null;
+            this.cobradaEm = null;
+            this.vencimento = null;
+        }
+    }
+
     public boolean isAtrasada(LocalDate hoje) {
         return status == StatusDivisao.COBRADA && vencimento != null && vencimento.isBefore(hoje);
     }

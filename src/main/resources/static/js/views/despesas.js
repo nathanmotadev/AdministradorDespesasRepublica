@@ -37,7 +37,8 @@ export function viewDespesas(ctx) {
         h('div', { class: 'stack' }, state.despesas.map((despesa) => cartaoDespesa(despesa, ctx))));
 }
 
-function cartaoDespesa(despesa, { state, recarregar }) {
+function cartaoDespesa(despesa, ctx) {
+    const { state, recarregar } = ctx;
     const casaId = state.casa.id;
     // quem não pagou só enxerga a própria parte e não tem ações de cobrança
     const souPagador = despesa.pagador.id === state.eu.id;
@@ -95,6 +96,7 @@ function cartaoDespesa(despesa, { state, recarregar }) {
             h('span', {}),
             h('div', { class: 'acoes' },
                 abertas.length >= 2 && h('button', { class: 'btn small', type: 'button', onclick: () => cobrar(abertas) }, 'Cobrar todos'),
+                h('button', { class: 'btn small', type: 'button', onclick: () => abrirNovaDespesa(ctx, despesa) }, 'Editar'),
                 !algumPago && h('button', { class: 'btn small ghost', type: 'button', onclick: excluir }, 'Excluir'))));
 }
 

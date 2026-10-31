@@ -22,9 +22,12 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class DespesaService {
@@ -54,6 +57,76 @@ public class DespesaService {
         Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
 
+        LocalDate data = request.data() != null ? request.data() : LocalDate.now();
+        BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
+        Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
+        despesa.definirParticipantes(participantes, request.separar());
+
+        Map<Morador, BigDecimal> partes = calcularPartes(pagador, participantes, total, request.separar());
+        partes.forEach((devedor, valor) -> {
+            Divisao divisao = new Divisao(despesa, devedor, valor);
+            if (divisao.isParteDoPagador()) {
+                divisao.quitar(data);
+            }
+            despesa.adicionarDivisao(divisao);
+        });
+        return DespesaResponse.de(despesas.save(despesa), pagador.idDoGrupo());
+    }
+
+    /**
+     * Edita uma despesa a qualquer momento (só quem pagou). A divisão é recalculada: quem continua
+     * com o mesmo valor mantém a situação (pendente, cobrada ou paga); quem teve o valor alterado
+     * depois de pagar volta a ficar em aberto; quem saiu da despesa deixa de dever; quem entrou começa pendente.
+     */
+    @Transactional
+    public DespesaResponse editar(Long casaId, Long despesaId, DespesaRequest request, Long solicitanteId) {
+        Despesa despesa = despesaVisivel(casaId, despesaId, solicitanteId);
+        exigirPagador(despesa, solicitanteId);
+        Morador pagador = despesa.getPagador();
+
+        // quem já fazia parte da despesa pode continuar nela mesmo que tenha saído da casa
+        Set<Long> jaNaDespesa = new HashSet<>();
+        despesa.getParticipantes().forEach(m -> jaNaDespesa.add(m.getId()));
+        despesa.getDivisoes().forEach(d -> jaNaDespesa.add(d.getDevedor().getId()));
+        List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds(), jaNaDespesa);
+
+        LocalDate data = request.data() != null ? request.data() : despesa.getData();
+        BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
+        Map<Morador, BigDecimal> partes = calcularPartes(pagador, participantes, total, request.separar());
+
+        despesa.atualizar(request.descricao().trim(), total, data);
+        despesa.definirParticipantes(participantes, request.separar());
+
+        Map<Long, Divisao> atuais = new HashMap<>();
+        for (Divisao divisao : List.copyOf(despesa.getDivisoes())) {
+            boolean continua = partes.keySet().stream().anyMatch(m -> m.getId().equals(divisao.getDevedor().getId()));
+            if (continua) {
+                atuais.put(divisao.getDevedor().getId(), divisao);
+            } else {
+                despesa.removerDivisao(divisao);
+            }
+        }
+        partes.forEach((devedor, valor) -> {
+            Divisao existente = atuais.get(devedor.getId());
+            if (existente != null) {
+                existente.alterarValor(valor);
+            } else {
+                Divisao nova = new Divisao(despesa, devedor, valor);
+                if (nova.isParteDoPagador()) {
+                    nova.quitar(data);
+                }
+                despesa.adicionarDivisao(nova);
+            }
+        });
+        return DespesaResponse.de(despesa, pagador.idDoGrupo());
+    }
+
+    /**
+     * Divide o total em partes iguais entre os participantes. Quem paga junto com outro morador tem a parte
+     * somada na do responsável (a não ser que {@code separar}); o grupo do pagador fica com a parte dele.
+     */
+    private Map<Morador, BigDecimal> calcularPartes(Morador pagador, List<Morador> participantes,
+                                                    BigDecimal total, boolean separar) {
         // quem paga junto com o pagador (ele mesmo e o grupo dele) não deve nada a ele
         Long grupoDoPagador = pagador.idDoGrupo();
         boolean alguemDevePagador = participantes.stream().anyMatch(p -> !p.idDoGrupo().equals(grupoDoPagador));
@@ -62,11 +135,6 @@ public class DespesaService {
                     "Selecione ao menos um participante além de quem pagou; senão não há nada a cobrar.");
         }
 
-        LocalDate data = request.data() != null ? request.data() : LocalDate.now();
-        BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
-        Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
-
-        // cada participante tem a sua parte; quem paga junto tem as partes somadas na do responsável
         List<BigDecimal> partes = DivisorDeDespesa.dividir(total, participantes.size());
         Map<Long, Morador> devedores = new LinkedHashMap<>();
         Map<Long, BigDecimal> valores = new LinkedHashMap<>();
@@ -75,7 +143,7 @@ public class DespesaService {
             Morador devedor = participante;
             if (participante.idDoGrupo().equals(grupoDoPagador)) {
                 devedor = pagador;
-            } else if (!request.separar() && participante.getResponsavel() != null) {
+            } else if (!separar && participante.getResponsavel() != null) {
                 devedor = participante.getResponsavel();
                 if (!devedor.isAtivo()) {
                     throw new RegraDeNegocioException("O responsável por " + participante.getNome() + " saiu da casa.");
@@ -84,14 +152,9 @@ public class DespesaService {
             devedores.putIfAbsent(devedor.getId(), devedor);
             valores.merge(devedor.getId(), partes.get(i), BigDecimal::add);
         }
-        for (Morador devedor : devedores.values()) {
-            Divisao divisao = new Divisao(despesa, devedor, valores.get(devedor.getId()));
-            if (divisao.isParteDoPagador()) {
-                divisao.quitar(data);
-            }
-            despesa.adicionarDivisao(divisao);
-        }
-        return DespesaResponse.de(despesas.save(despesa), pagador.idDoGrupo());
+        Map<Morador, BigDecimal> resultado = new LinkedHashMap<>();
+        devedores.forEach((id, devedor) -> resultado.put(devedor, valores.get(id)));
+        return resultado;
     }
 
     /**
@@ -220,9 +283,14 @@ public class DespesaService {
     }
 
     List<Morador> buscarParticipantes(Long casaId, List<Long> ids) {
+        return buscarParticipantes(casaId, ids, Set.of());
+    }
+
+    /** Moradores ativos da casa; {@code permitidosInativos} aceita também quem já saiu (usado ao editar). */
+    private List<Morador> buscarParticipantes(Long casaId, List<Long> ids, Set<Long> permitidosInativos) {
         List<Long> idsUnicos = ids.stream().distinct().toList();
         List<Morador> encontrados = moradores.findByIdInAndCasaId(idsUnicos, casaId).stream()
-                .filter(Morador::isAtivo)
+                .filter(m -> m.isAtivo() || permitidosInativos.contains(m.getId()))
                 .sorted(Comparator.comparing(Morador::getNome, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         if (encontrados.size() != idsUnicos.size()) {

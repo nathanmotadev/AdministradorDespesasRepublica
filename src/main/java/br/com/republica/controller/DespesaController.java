@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,6 +67,15 @@ public class DespesaController {
                                   @AuthenticationPrincipal Jwt jwt) {
         Long eu = autorizacao.membroDaCasa(jwt, casaId).getId();
         return despesaService.buscar(casaId, despesaId, eu);
+    }
+
+    @PutMapping("/{despesaId}")
+    @Operation(summary = "Edita uma despesa que eu paguei, a qualquer momento, e recalcula a divisão")
+    public DespesaResponse editar(@PathVariable Long casaId, @PathVariable Long despesaId,
+                                  @Valid @RequestBody DespesaRequest request,
+                                  @AuthenticationPrincipal Jwt jwt) {
+        Long eu = autorizacao.membroDaCasa(jwt, casaId).getId();
+        return despesaService.editar(casaId, despesaId, request, eu);
     }
 
     @DeleteMapping("/{despesaId}")

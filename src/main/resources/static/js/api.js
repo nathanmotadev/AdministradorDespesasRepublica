@@ -80,6 +80,8 @@ export const api = {
         request(`/casas/${casaId}/despesas${mes ? `?mes=${mes}` : ''}`),
     criarDespesa: (casaId, despesa) =>
         request(`/casas/${casaId}/despesas`, { method: 'POST', body: despesa }),
+    editarDespesa: (casaId, despesaId, despesa) =>
+        request(`/casas/${casaId}/despesas/${despesaId}`, { method: 'PUT', body: despesa }),
     excluirDespesa: (casaId, despesaId) =>
         request(`/casas/${casaId}/despesas/${despesaId}`, { method: 'DELETE' }),
     cobrarTodos: (casaId, despesaId, vencimento) =>

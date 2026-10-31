@@ -148,7 +148,10 @@ public final class Dtos {
     }
 
     public record DespesaResponse(Long id, String descricao, BigDecimal valorTotal, LocalDate data,
-                                  MoradorResponse pagador, boolean quitada, List<DivisaoResponse> divisoes) {
+                                  MoradorResponse pagador, boolean quitada, List<DivisaoResponse> divisoes,
+                                  @Schema(description = "Quem participou (só para quem pagou, para editar)")
+                                  List<Long> participantesIds,
+                                  boolean cobrarSeparado) {
         /**
          * Quem pagou vê todas as divisões da despesa; os demais veem apenas a própria parte.
          * É aqui que a privacidade entre moradores é garantida na resposta.
@@ -159,8 +162,13 @@ public final class Dtos {
                     .filter(div -> visorPagou || div.getDevedor().idDoGrupo().equals(visorGrupoId))
                     .map(DivisaoResponse::de)
                     .toList();
+            // despesas antigas não guardaram os participantes: usa quem tem uma divisão
+            List<Long> participantes = !visorPagou ? List.of()
+                    : !d.getParticipantes().isEmpty() ? d.getParticipantes().stream().map(Morador::getId).toList()
+                    : d.getDivisoes().stream().map(div -> div.getDevedor().getId()).toList();
             return new DespesaResponse(d.getId(), d.getDescricao(), d.getValorTotal(), d.getData(),
-                    MoradorResponse.de(d.getPagador()), !d.temPendencias(), visiveis);
+                    MoradorResponse.de(d.getPagador()), !d.temPendencias(), visiveis,
+                    participantes, d.isCobrarSeparado());
         }
     }
 
