@@ -83,7 +83,10 @@ function renderizar() {
         h('nav', { class: 'nav-desktop', 'aria-label': 'Seções' }, ABAS.map((aba) => botaoAba(aba, false))),
         h('div', { class: 'perfil' }, avatar(state.eu), h('span', { class: 'nome' }, state.eu.nome)));
 
-    nav.replaceChildren(...ABAS.map((aba) => botaoAba(aba, true)));
+    const abas = ABAS.map((aba) => botaoAba(aba, true));
+    const botaoNova = h('button', { class: 'nav-centro', type: 'button', 'aria-label': 'Nova despesa',
+        disabled: moradoresAtivos(state).length < 2, onclick: () => abrirNovaDespesa(ctx) }, icone('mais', 26));
+    nav.replaceChildren(abas[0], abas[1], botaoNova, abas[2]);
 
     const podeCriar = moradoresAtivos(state).length >= 2;
     app.className = `container${state.aba === 'inicio' ? ' com-lateral' : ''}`;

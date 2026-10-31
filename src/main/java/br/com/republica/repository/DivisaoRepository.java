@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,7 +25,7 @@ public interface DivisaoRepository extends JpaRepository<Divisao, Long> {
     List<Divisao> findEmAbertoPorCasa(@Param("casaId") Long casaId);
 
     /**
-     * Só as partes em aberto de que o morador participa: ou ele deve (devedor) ou ele tem a receber (pagador).
+     * Só as partes em aberto de que o grupo do morador (ele e quem paga junto) participa: ou ele deve (devedor) ou ele tem a receber (pagador).
      * É daqui que sai tudo o que a "Minha visão" mostra, então um morador nunca enxerga dívida alheia.
      */
     @Query("""
@@ -35,9 +36,9 @@ public interface DivisaoRepository extends JpaRepository<Divisao, Long> {
             where e.casa.id = :casaId
               and d.status <> br.com.republica.model.StatusDivisao.PAGA
               and d.devedor.id <> e.pagador.id
-              and (d.devedor.id = :moradorId or e.pagador.id = :moradorId)
+              and (d.devedor.id in :ids or e.pagador.id in :ids)
             """)
-    List<Divisao> findEmAbertoDoMorador(@Param("casaId") Long casaId, @Param("moradorId") Long moradorId);
+    List<Divisao> findEmAbertoDoGrupo(@Param("casaId") Long casaId, @Param("ids") Collection<Long> ids);
 
     @EntityGraph(attributePaths = {"devedor", "despesa", "despesa.pagador"})
     Optional<Divisao> findWithDetalhesById(Long id);

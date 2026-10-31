@@ -61,5 +61,5 @@ export function badgeDivida(divida) {
         return h('span', { class: 'badge cobrada' },
             divida.vencimento ? `Cobrada · vence ${dataBR(divida.vencimento, false)}` : 'Cobrada');
     }
-    return h('span', { class: 'badge pendente' }, 'Ainda não cobrada');
+    return null;
 }

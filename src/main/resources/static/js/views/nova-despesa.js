@@ -18,7 +18,11 @@ export function abrirNovaDespesa({ state, recarregar }) {
         data: hojeISO(),
         pagadorId: state.eu.id,
         participantes: new Set(moradores.map((m) => m.id)),
+        separar: false,
     };
+    const grupoDe = (m) => m.responsavelId ?? m.id;
+    const euGrupo = grupoDe(state.eu);
+    const haAgrupados = moradores.some((m) => m.responsavelId);
 
     // ---------- prévia ----------
     const previa = h('div', { class: 'previa', 'aria-live': 'polite' });
@@ -31,14 +35,15 @@ export function abrirNovaDespesa({ state, recarregar }) {
             .filter((m) => form.participantes.has(m.id))
             .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
         const pagador = moradores.find((m) => m.id === form.pagadorId);
-        const algumDevedor = participantes.some((m) => m.id !== form.pagadorId);
+        const algumDevedor = participantes.some((m) => grupoDe(m) !== euGrupo);
         const valido = valor > 0 && form.descricao.trim().length > 0 && algumDevedor;
 
         let conteudo = 'Informe o valor e quem participa para ver a divisão.';
         if (valor > 0 && participantes.length > 0) {
             const partes = dividirEmCentavos(centavos(valor), participantes.length);
-            const indicePagador = participantes.findIndex((m) => m.id === form.pagadorId);
-            const aReceber = (centavos(valor) - (indicePagador >= 0 ? partes[indicePagador] : 0)) / 100;
+            // quem paga junto comigo (e eu mesmo) não me deve nada
+            const minhaParte = participantes.reduce((soma, m, i) => soma + (grupoDe(m) === euGrupo ? partes[i] : 0), 0);
+            const aReceber = (centavos(valor) - minhaParte) / 100;
             const igual = partes.every((p) => p === partes[0]);
             conteudo = algumDevedor
                 ? [`${participantes.length} pessoas · `, h('strong', {}, brl(partes[0] / 100)),
@@ -93,6 +98,7 @@ export function abrirNovaDespesa({ state, recarregar }) {
                 valorTotal: lerValor(form.valorTexto),
                 data: form.data,
                 participantesIds: [...form.participantes],
+                cobrarSeparado: form.separar,
             });
             fechar();
             toast('Despesa registrada e dividida');
@@ -115,6 +121,9 @@ export function abrirNovaDespesa({ state, recarregar }) {
                     h('button', { type: 'button', class: 'btn small ghost', onclick: () => marcarTodos(true) }, 'Todos'),
                     h('button', { type: 'button', class: 'btn small ghost', onclick: () => marcarTodos(false) }, 'Limpar'))),
             participantes),
+        haAgrupados && h('label', { class: 'chip simple', style: 'margin-bottom:.9rem' },
+            h('input', { type: 'checkbox', onchange: (e) => { form.separar = e.target.checked; } }),
+            'Cobrar cada um separado (ignorar quem paga junto)'),
         h('div', { class: 'field' }, h('label', {}, 'Data'), campoData),
         previa, erro,
         h('button', { type: 'submit', hidden: true }));

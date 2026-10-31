@@ -4,7 +4,7 @@ import { avatar, centavos, executar } from '../components.js';
 import { brl, dataBR, deslocarMes, rotuloMes } from '../format.js';
 import { abrirCobranca } from './cobranca.js';
 import { abrirNovaDespesa } from './nova-despesa.js';
-import { moradoresAtivos } from './moradores.js';
+import { moradoresAtivos, nomeDoGrupo } from './moradores.js';
 
 const emAberto = (despesa) => despesa.divisoes.filter((d) => !d.parteDoPagador && d.status !== 'PAGA');
 const deOutros = (despesa) => despesa.divisoes.filter((d) => !d.parteDoPagador);
@@ -63,7 +63,7 @@ function cartaoDespesa(despesa, { state, recarregar }) {
     async function confirmarRecebimento(divisao) {
         const ok = await confirmar({
             titulo: 'Confirmar recebimento',
-            mensagem: `Você recebeu ${brl(divisao.valor)} de ${divisao.devedor.nome}?`,
+            mensagem: `Você recebeu ${brl(divisao.valor)} de ${nomeDoGrupo(state, divisao.devedor)}?`,
             rotulo: 'Sim, recebi',
         });
         if (ok && await executar(() => api.registrarPagamento(divisao.id), 'Pagamento registrado')) {
@@ -88,7 +88,8 @@ function cartaoDespesa(despesa, { state, recarregar }) {
             abertas.length === 0 ? 'Tudo recebido' : `${brl(recebido / 100)} de ${brl(totalOutros / 100)} recebidos`),
 
         h('div', { class: 'divisoes' },
-            despesa.divisoes.map((d) => linhaDivisao(d, souPagador, cobrar, confirmarRecebimento))),
+            despesa.divisoes.filter((d) => !d.parteDoPagador)
+                .map((d) => linhaDivisao(d, souPagador, cobrar, confirmarRecebimento, state))),
 
         souPagador && h('div', { class: 'card-head', style: 'margin:.75rem 0 0' },
             h('span', {}),
@@ -97,9 +98,9 @@ function cartaoDespesa(despesa, { state, recarregar }) {
                 !algumPago && h('button', { class: 'btn small ghost', type: 'button', onclick: excluir }, 'Excluir'))));
 }
 
-function linhaDivisao(divisao, souPagador, cobrar, confirmarRecebimento) {
+function linhaDivisao(divisao, souPagador, cobrar, confirmarRecebimento, state) {
     return h('div', { class: 'divisao' },
-        h('div', { class: 'quem' }, avatar(divisao.devedor, true), divisao.devedor.nome),
+        h('div', { class: 'quem' }, avatar(divisao.devedor, true), nomeDoGrupo(state, divisao.devedor)),
         h('span', { class: 'valor num' }, brl(divisao.valor)),
         situacao(divisao),
         souPagador && !divisao.parteDoPagador && divisao.status !== 'PAGA' && h('div', { class: 'acoes' },

@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { abrirModal, h, toast } from '../ui.js';
 import { avatar, executar, icone } from '../components.js';
 import { viewMoradores } from './moradores.js';
+import { cartaoContasFixas } from './contas-fixas.js';
 
 /** Aba "Casa": nome, convite (administrador), moradores e a conta de quem está logado. */
 export function viewCasa(ctx) {
@@ -10,6 +11,7 @@ export function viewCasa(ctx) {
         h('h1', {}, 'Casa'),
         cartaoCasa(ctx),
         state.eu.admin && cartaoConvite(ctx),
+        cartaoContasFixas(ctx),
         viewMoradores(ctx),
         cartaoConta(ctx));
 }

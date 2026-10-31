@@ -131,7 +131,25 @@ classDiagram
         -String nome
         -boolean ativo
         -boolean admin
+        -Morador responsavel
+        +idDoGrupo() Long
     }
+    Morador "0..1" --> "*" Morador : responsavel (paga junto)
+    class ContaFixa {
+        -Long id
+        -String descricao
+        -BigDecimal valor
+        -int diaDoMes
+        -boolean ativa
+        -LocalDate proximoVencimento
+        +atualizar()
+        +avancar()
+        +pausar()
+        +retomar()
+    }
+    Casa "1" --> "*" ContaFixa
+    ContaFixa "*" --> "1" Morador : pagador
+    ContaFixa "*" --> "*" Morador : participantes
     class Usuario {
         -Long id
         -String email
@@ -250,6 +268,9 @@ erDiagram
     MORADOR ||--o{ DESPESA : "paga"
     DESPESA ||--|{ DIVISAO : "se divide em"
     MORADOR ||--o{ DIVISAO : "deve"
+    CASA ||--o{ CONTA_FIXA : "tem"
+    MORADOR ||--o{ CONTA_FIXA : "paga"
+    CONTA_FIXA }o--o{ MORADOR : "divide com"
 
     CASA {
         bigint id PK
@@ -262,6 +283,7 @@ erDiagram
         boolean ativo
         boolean administrador
         bigint casa_id FK
+        bigint responsavel_id FK "nullable"
     }
     USUARIO {
         bigint id PK
@@ -274,6 +296,16 @@ erDiagram
         varchar descricao
         decimal valor_total
         date data
+        bigint casa_id FK
+        bigint pagador_id FK
+    }
+    CONTA_FIXA {
+        bigint id PK
+        varchar descricao
+        decimal valor
+        int dia_do_mes
+        boolean ativa
+        date proximo_vencimento
         bigint casa_id FK
         bigint pagador_id FK
     }
@@ -409,3 +441,48 @@ flowchart TD
 ```
 
 Os arquivos estáticos (`/`, `/js`, `/css`), o Swagger e o H2 console ficam liberados (`permitAll`); todo o resto exige token.
+
+---
+
+## 9. Contas fixas: geração mensal
+
+Não há agendador. Quando alguém da casa abre o app, `GET /api/eu` chama `ContaFixaService.gerarPendentes`:
+
+```mermaid
+sequenceDiagram
+    participant App as Front-end
+    participant EU as EuController
+    participant CF as ContaFixaService
+    participant R as ContaFixaRepository
+    participant D as DespesaService
+
+    App->>EU: GET /api/eu
+    EU->>CF: gerarPendentes(casaId)
+    CF->>R: existe conta ativa vencida? (sem trava)
+    alt nenhuma
+        CF-->>EU: nada a fazer
+    else há vencidas
+        CF->>R: busca contas ativas (PESSIMISTIC_WRITE)
+        loop cada mês vencido (até 12)
+            CF->>D: registrar(despesa datada no vencimento, pagador, participantes ativos)
+            CF->>CF: avancar() (+1 mês)
+        end
+    end
+    EU-->>App: perfil
+```
+
+A trava de escrita evita que dois acessos simultâneos criem a mesma despesa duas vezes.
+Se o pagador saiu da casa ou não sobrou ninguém para dividir, a conta é pausada.
+
+---
+
+## 10. Moradores que pagam juntos
+
+Um morador pode ter um `responsavel` (um nível, sem correntes), definido pelo administrador.
+Na despesa a divisão continua por pessoa (4 moradores, 4 partes), mas as partes de quem paga junto
+são somadas numa só `Divisao`, cujo devedor é o responsável. Regras:
+
+- as partes do grupo de quem pagou são quitadas automaticamente (ninguém deve a si mesmo);
+- os dois do grupo enxergam a dívida (visibilidade por `idDoGrupo`), mas só quem pagou cobra e confirma;
+- `cobrarSeparado` na despesa ignora o agrupamento só naquela vez;
+- não é possível remover um responsável que ainda tem agregados.

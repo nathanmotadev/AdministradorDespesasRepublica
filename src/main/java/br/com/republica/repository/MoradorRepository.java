@@ -14,5 +14,7 @@ public interface MoradorRepository extends JpaRepository<Morador, Long> {
 
     List<Morador> findByIdInAndCasaId(List<Long> ids, Long casaId);
 
+    List<Morador> findByCasaIdAndResponsavelId(Long casaId, Long responsavelId);
+
     boolean existsByCasaIdAndNomeIgnoreCaseAndAtivoTrue(Long casaId, String nome);
 }

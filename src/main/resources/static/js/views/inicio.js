@@ -1,41 +1,66 @@
 import { api } from '../api.js';
 import { confirmar, h } from '../ui.js';
-import { avatar, badgeDivida, executar, icone } from '../components.js';
-import { brl, dataBR } from '../format.js';
+import { avatar, badgeDivida, centavos as centavosDe, executar, icone } from '../components.js';
+import { brl, dataBR, hojeISO } from '../format.js';
 import { viewAcertos } from './acertos.js';
 import { abrirCobranca } from './cobranca.js';
-import { moradoresAtivos } from './moradores.js';
+import { moradoresAtivos, nomeDoGrupo } from './moradores.js';
 
 /** "Minha visão": só o que envolve quem está logado. Tudo vem das rotas /api/eu. */
 export function viewInicio(ctx) {
     const { state } = ctx;
     const { resumo, dividas, eu } = state;
-    const saldo = Math.round((resumo.aReceber - resumo.deve) * 100) / 100;
     const quite = resumo.acertos.length === 0 && dividas.euDevo.length === 0 && dividas.meDevem.length === 0;
 
     return h('div', { class: 'stack' },
-        h('div', { class: 'saudacao' },
-            h('h1', {}, `Oi, ${eu.nome}`),
-            h('p', { class: 'muted' }, 'Aqui só aparece o que envolve você.')),
+        h('h1', { class: 'saudacao' }, `Oi, ${eu.nome}`),
 
-        h('div', { class: 'estatisticas' },
-            h('section', { class: 'stat hero', 'aria-label': 'Seu saldo' },
-                h('div', { class: 'rotulo' }, 'Seu saldo'),
-                h('div', { class: 'valor num' }, saldo === 0 ? brl(0) : `${saldo < 0 ? '−' : '+'} ${brl(Math.abs(saldo))}`),
-                h('div', { class: 'nota' }, saldo < 0 ? 'quanto você deve no total'
-                    : saldo > 0 ? 'a seu favor, já descontando o que você deve' : 'nada pendente')),
-            h('section', { class: 'stat', 'aria-label': 'Você deve' },
-                h('div', { class: 'rotulo' }, 'Você deve'),
-                h('div', { class: `valor num${resumo.deve > 0 ? ' negativo' : ''}` }, brl(resumo.deve))),
-            h('section', { class: 'stat', 'aria-label': 'Você tem a receber' },
-                h('div', { class: 'rotulo' }, 'A receber'),
-                h('div', { class: `valor num${resumo.aReceber > 0 ? ' positivo' : ''}` }, brl(resumo.aReceber)))),
+        h('section', { class: 'resumo', 'aria-label': 'Seu resumo' },
+            h('div', { class: 'resumo-titulo' }, 'Seu resumo'),
+            h('div', { class: 'resumo-grade' },
+                h('div', {}, h('div', { class: 'rotulo' }, 'Você deve'),
+                    h('div', { class: 'valor num deve' }, brl(resumo.deve))),
+                h('div', {}, h('div', { class: 'rotulo' }, 'A receber'),
+                    h('div', { class: 'valor num receber' }, brl(resumo.aReceber))))),
+
+        proximasContas(ctx),
 
         quite
             ? h('div', { class: 'card tudo-quite' },
                 h('strong', {}, 'Tudo quite por aqui'),
-                h('span', { class: 'muted' }, 'Quando alguém registrar uma despesa com você, ela aparece aqui.'))
+                h('span', { class: 'muted' }, 'Nada a pagar nem a receber agora.'))
             : [resumo.acertos.length > 0 && viewAcertos(ctx), secaoDividas(ctx)]);
+}
+
+/** Contas fixas que ainda vão vencer, para dar tempo de se preparar antes de virarem despesa. */
+function proximasContas({ state }) {
+    const corpo = h('div', { class: 'proximas-lista' });
+    const cartao = h('section', { class: 'card proximas', 'aria-labelledby': 'titulo-proximas', hidden: true },
+        h('h2', { id: 'titulo-proximas' }, 'Próximas contas'), corpo);
+
+    const diasAte = (iso) => Math.round((new Date(`${iso}T00:00:00`) - new Date(`${hojeISO()}T00:00:00`)) / 86400000);
+    const quando = (dias) => (dias <= 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`);
+
+    api.listarContasFixas(state.casa.id).then((contas) => {
+        const proximas = contas.filter((c) => c.ativa)
+            .sort((a, b) => a.proximoVencimento.localeCompare(b.proximoVencimento)).slice(0, 4);
+        if (proximas.length === 0) return;
+        corpo.replaceChildren(...proximas.map((c) => {
+            const euPago = c.pagador.id === state.eu.id;
+            const minhaParte = c.valor / c.participantes.length; // aproximada: não considera quem paga junto
+            const dias = diasAte(c.proximoVencimento);
+            return h('div', { class: `proxima${dias <= 3 ? ' urgente' : ''}` },
+                h('div', { class: 'esq' },
+                    h('div', { class: 'nome' }, c.descricao),
+                    h('div', { class: 'dica' }, `${dataBR(c.proximoVencimento, false)} · ${quando(dias)}`)),
+                h('div', { class: 'direita' },
+                    h('strong', { class: 'num' }, brl(euPago ? c.valor : minhaParte)),
+                    h('div', { class: 'dica' }, euPago ? 'você paga o total' : `sua parte, ${c.pagador.nome} paga`)));
+        }));
+        cartao.hidden = false;
+    }).catch(() => { /* sem a lista, o card simplesmente não aparece */ });
+
+    return cartao;
 }
 
 function secaoDividas(ctx) {
@@ -59,19 +84,44 @@ function secaoDividas(ctx) {
                 h('strong', {}, aba === 'devo' ? 'Você não deve nada' : 'Ninguém te deve agora'),
                 aba === 'devo' ? 'Quando alguém dividir uma despesa com você, ela aparece aqui.'
                     : 'Registre uma despesa e marque quem participa.')
-            : h('div', { class: 'stack' }, lista.map((d) => cartaoDivida(d, aba === 'devem', ctx))),
-        aba === 'devo' && lista.length > 0
-            && h('p', { class: 'dica' }, 'Quando você pagar, quem recebeu confirma no app.'));
+            : h('div', { class: 'stack' }, agruparPorPessoa(lista).map((g) => grupoPessoa(g, aba === 'devem', ctx))),
+        null);
 }
 
-function cartaoDivida(divida, souCredor, ctx) {
+/** Junta as dívidas de cada pessoa e soma em centavos. Quem tem mais a pagar/receber vem primeiro. */
+function agruparPorPessoa(lista) {
+    const grupos = new Map();
+    for (const divida of lista) {
+        const grupo = grupos.get(divida.pessoa.id) ?? { pessoa: divida.pessoa, dividas: [], centavos: 0 };
+        grupo.dividas.push(divida);
+        grupo.centavos += centavosDe(divida.valor);
+        grupos.set(divida.pessoa.id, grupo);
+    }
+    return [...grupos.values()].sort((a, b) => b.centavos - a.centavos);
+}
+
+/** Um cartão por pessoa: o total no topo e, embaixo, cada dívida que compõe esse total. */
+function grupoPessoa(grupo, souCredor, ctx) {
+    const { pessoa, dividas, centavos } = grupo;
+    const varias = dividas.length > 1;
+    return h('article', { class: 'card grupo' },
+        h('header', { class: 'grupo-topo' },
+            avatar(pessoa),
+            h('div', { class: 'info' },
+                h('div', { class: 'titulo' }, souCredor ? nomeDoGrupo(ctx.state, pessoa) : `Para ${pessoa.nome}`),
+                h('div', { class: 'sub' }, varias ? `${dividas.length} dívidas` : '1 dívida')),
+            h('div', { class: 'valor num' }, brl(centavos / 100))),
+        h('div', { class: 'grupo-lista' }, dividas.map((d) => linhaDivida(d, souCredor, varias, ctx))));
+}
+
+function linhaDivida(divida, souCredor, mostrarValor, ctx) {
     const { state, recarregar } = ctx;
     const data = dataBR(divida.data, false);
 
     async function confirmarRecebimento() {
         const ok = await confirmar({
             titulo: 'Confirmar recebimento',
-            mensagem: `Você recebeu ${brl(divida.valor)} de ${divida.pessoa.nome}?`,
+            mensagem: `Você recebeu ${brl(divida.valor)} de ${nomeDoGrupo(ctx.state, divida.pessoa)}?`,
             rotulo: 'Sim, recebi',
         });
         if (ok && await executar(() => api.registrarPagamento(divida.divisaoId), 'Pagamento registrado')) {
@@ -86,13 +136,12 @@ function cartaoDivida(divida, souCredor, ctx) {
         recarregar,
     });
 
-    return h('article', { class: 'card divida' },
-        avatar(divida.pessoa),
+    return h('div', { class: 'divida-linha' },
         h('div', { class: 'info' },
             h('div', { class: 'titulo' }, divida.descricao),
-            h('div', { class: 'sub' }, souCredor ? `${divida.pessoa.nome} · ${data}` : `Para ${divida.pessoa.nome} · ${data}`),
+            h('div', { class: 'sub' }, data),
             badgeDivida(divida)),
-        h('div', { class: 'valor num' }, brl(divida.valor)),
+        mostrarValor && h('div', { class: 'valor num' }, brl(divida.valor)),
         souCredor && h('div', { class: 'acoes' },
             h('button', { class: 'btn small', type: 'button', onclick: cobrar },
                 divida.status === 'COBRADA' ? 'Cobrar de novo' : 'Cobrar'),

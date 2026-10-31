@@ -5,6 +5,7 @@ import br.com.republica.dto.Dtos.CasaResponse;
 import br.com.republica.dto.Dtos.ConviteResponse;
 import br.com.republica.dto.Dtos.MoradorRequest;
 import br.com.republica.dto.Dtos.MoradorResponse;
+import br.com.republica.dto.Dtos.ResponsavelRequest;
 import br.com.republica.exception.RegraDeNegocioException;
 import br.com.republica.model.Morador;
 import br.com.republica.seguranca.AutorizacaoService;
@@ -75,5 +76,14 @@ public class CasaController {
         }
         casaService.desativarMorador(casaId, moradorId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{casaId}/moradores/{moradorId}/responsavel")
+    @Operation(summary = "Define que um morador paga junto com outro (administrador); responsavelId nulo desfaz")
+    public MoradorResponse definirResponsavel(@PathVariable Long casaId, @PathVariable Long moradorId,
+                                              @RequestBody ResponsavelRequest request,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        autorizacao.administradorDaCasa(jwt, casaId);
+        return casaService.definirResponsavel(casaId, moradorId, request.responsavelId());
     }
 }

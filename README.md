@@ -35,12 +35,17 @@ Java 17 · Spring Boot 3 (Web, Data JPA, Validation, Security + JWT) · H2 (arqu
 | GET | `/api/casas` · `/api/casas/{id}` | Lista / detalha casas |
 | POST | `/api/casas/{id}/moradores` | Adiciona morador |
 | DELETE | `/api/casas/{id}/moradores/{moradorId}` | Remove morador (só sem dívidas) |
+| PUT | `/api/casas/{id}/moradores/{moradorId}/responsavel` | Admin: define quem paga junto com quem (ex.: irmãs); `responsavelId` nulo desfaz |
 | POST | `/api/casas/{id}/despesas` | Registra e divide uma despesa |
 | GET | `/api/casas/{id}/despesas?mes=2026-10` | Lista despesas (opcionalmente de um mês) |
 | DELETE | `/api/casas/{id}/despesas/{despesaId}` | Exclui (só se ninguém pagou) |
 | POST | `/api/casas/{id}/despesas/{despesaId}/cobranca` | Cobra todos de uma despesa |
 | POST | `/api/divisoes/{id}/cobranca` | Cobra uma pessoa, com prazo opcional |
 | POST | `/api/divisoes/{id}/pagamento` | Confirma recebimento |
+| POST · GET | `/api/casas/{id}/contas-fixas` | Cadastra / lista contas que se repetem todo mês |
+| PUT | `/api/casas/{id}/contas-fixas/{contaId}` | Altera valor, dia ou participantes (vale da próxima cobrança em diante) |
+| POST | `/api/casas/{id}/contas-fixas/{contaId}/pausar` · `/retomar` | Pausa / retoma a conta |
+| DELETE | `/api/casas/{id}/contas-fixas/{contaId}` | Exclui a conta (as despesas já geradas ficam) |
 | GET | `/api/casas/{id}/resumo` | Saldos e "quem deve a quem" |
 
 Códigos de resposta: `201` criado · `204` sem conteúdo · `400` dados inválidos (com o detalhe por campo) · `404` não encontrado · `422` regra de negócio violada. Todos os erros seguem o mesmo formato JSON.
@@ -98,3 +103,5 @@ Veja o arquivo [`DESAFIOS.md`](DESAFIOS.md).
 ## Licença
 
 MIT — veja o arquivo [LICENSE](LICENSE).
+
+- Como colocar no ar (Render + PostgreSQL): [`docs/DEPLOY.md`](docs/DEPLOY.md)

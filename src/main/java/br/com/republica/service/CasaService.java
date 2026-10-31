@@ -86,7 +86,42 @@ public class CasaService {
             throw new RegraDeNegocioException(
                     morador.getNome() + " ainda tem valores a pagar ou a receber. Quite tudo antes de remover.");
         }
+        boolean temAgregados = !moradores.findByCasaIdAndResponsavelId(casaId, moradorId).isEmpty();
+        if (temAgregados) {
+            throw new RegraDeNegocioException(
+                    morador.getNome() + " é responsável por quem paga junto com ele. Desfaça o agrupamento antes de remover.");
+        }
         morador.setAtivo(false);
+        morador.setResponsavel(null);
+    }
+
+    /**
+     * Define que um morador paga junto com outro (o responsável), ou desfaz o agrupamento com {@code null}.
+     * Só um nível: o responsável não pode ser agregado de ninguém, e quem tem agregados não vira agregado.
+     */
+    @Transactional
+    public MoradorResponse definirResponsavel(Long casaId, Long moradorId, Long responsavelId) {
+        Morador morador = moradores.findByIdAndCasaId(moradorId, casaId)
+                .filter(Morador::isAtivo)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Morador", moradorId));
+        if (responsavelId == null) {
+            morador.setResponsavel(null);
+            return MoradorResponse.de(morador);
+        }
+        if (responsavelId.equals(moradorId)) {
+            throw new RegraDeNegocioException("Um morador não pode ser responsável por si mesmo.");
+        }
+        Morador responsavel = moradores.findByIdAndCasaId(responsavelId, casaId)
+                .filter(Morador::isAtivo)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Morador", responsavelId));
+        if (responsavel.getResponsavel() != null) {
+            throw new RegraDeNegocioException(responsavel.getNome() + " já paga junto com outra pessoa.");
+        }
+        if (!moradores.findByCasaIdAndResponsavelId(casaId, moradorId).isEmpty()) {
+            throw new RegraDeNegocioException(morador.getNome() + " já é responsável por alguém.");
+        }
+        morador.setResponsavel(responsavel);
+        return MoradorResponse.de(morador);
     }
 
     /** Cria a casa já com o código de convite. Usado também pelo cadastro. */

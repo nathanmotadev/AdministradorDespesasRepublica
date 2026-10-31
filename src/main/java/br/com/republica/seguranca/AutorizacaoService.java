@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * O morador é conferido no banco a cada chamada: quem saiu da casa perde o acesso na hora.
  */
 @Component
-public class AutorizacaoService {
+public class  AutorizacaoService {
 
     private final MoradorRepository moradores;
 

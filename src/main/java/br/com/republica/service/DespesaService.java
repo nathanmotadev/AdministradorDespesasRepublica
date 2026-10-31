@@ -22,7 +22,9 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class DespesaService {
@@ -31,9 +33,11 @@ public class DespesaService {
     private final DespesaRepository despesas;
     private final DivisaoRepository divisoes;
     private final MoradorRepository moradores;
+    private final GrupoService grupos;
 
     public DespesaService(CasaService casaService, DespesaRepository despesas,
-                          DivisaoRepository divisoes, MoradorRepository moradores) {
+                          DivisaoRepository divisoes, MoradorRepository moradores, GrupoService grupos) {
+        this.grupos = grupos;
         this.casaService = casaService;
         this.despesas = despesas;
         this.divisoes = divisoes;
@@ -50,7 +54,9 @@ public class DespesaService {
         Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
 
-        boolean alguemDevePagador = participantes.stream().anyMatch(p -> !p.getId().equals(pagador.getId()));
+        // quem paga junto com o pagador (ele mesmo e o grupo dele) não deve nada a ele
+        Long grupoDoPagador = pagador.idDoGrupo();
+        boolean alguemDevePagador = participantes.stream().anyMatch(p -> !p.idDoGrupo().equals(grupoDoPagador));
         if (!alguemDevePagador) {
             throw new RegraDeNegocioException(
                     "Selecione ao menos um participante além de quem pagou; senão não há nada a cobrar.");
@@ -60,15 +66,32 @@ public class DespesaService {
         BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
         Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
 
+        // cada participante tem a sua parte; quem paga junto tem as partes somadas na do responsável
         List<BigDecimal> partes = DivisorDeDespesa.dividir(total, participantes.size());
+        Map<Long, Morador> devedores = new LinkedHashMap<>();
+        Map<Long, BigDecimal> valores = new LinkedHashMap<>();
         for (int i = 0; i < participantes.size(); i++) {
-            Divisao divisao = new Divisao(despesa, participantes.get(i), partes.get(i));
+            Morador participante = participantes.get(i);
+            Morador devedor = participante;
+            if (participante.idDoGrupo().equals(grupoDoPagador)) {
+                devedor = pagador;
+            } else if (!request.separar() && participante.getResponsavel() != null) {
+                devedor = participante.getResponsavel();
+                if (!devedor.isAtivo()) {
+                    throw new RegraDeNegocioException("O responsável por " + participante.getNome() + " saiu da casa.");
+                }
+            }
+            devedores.putIfAbsent(devedor.getId(), devedor);
+            valores.merge(devedor.getId(), partes.get(i), BigDecimal::add);
+        }
+        for (Morador devedor : devedores.values()) {
+            Divisao divisao = new Divisao(despesa, devedor, valores.get(devedor.getId()));
             if (divisao.isParteDoPagador()) {
                 divisao.quitar(data);
             }
             despesa.adicionarDivisao(divisao);
         }
-        return DespesaResponse.de(despesas.save(despesa), solicitanteId);
+        return DespesaResponse.de(despesas.save(despesa), pagador.idDoGrupo());
     }
 
     /**
@@ -81,15 +104,16 @@ public class DespesaService {
         List<Despesa> encontradas = (mes == null)
                 ? despesas.findByCasaIdOrderByDataDescIdDesc(casaId)
                 : despesas.findByCasaIdAndDataBetweenOrderByDataDescIdDesc(casaId, mes.atDay(1), mes.atEndOfMonth());
+        Long grupo = grupos.idDoGrupo(solicitanteId);
         return encontradas.stream()
-                .filter(d -> d.envolve(solicitanteId))
-                .map(d -> DespesaResponse.de(d, solicitanteId))
+                .filter(d -> d.envolve(grupo))
+                .map(d -> DespesaResponse.de(d, grupo))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public DespesaResponse buscar(Long casaId, Long despesaId, Long solicitanteId) {
-        return DespesaResponse.de(despesaVisivel(casaId, despesaId, solicitanteId), solicitanteId);
+        return DespesaResponse.de(despesaVisivel(casaId, despesaId, solicitanteId), grupos.idDoGrupo(solicitanteId));
     }
 
     /** Só quem pagou exclui, e só se ninguém registrou pagamento ainda (evita perder histórico de dinheiro). */
@@ -118,7 +142,7 @@ public class DespesaService {
             throw new RegraDeNegocioException("Não há valores em aberto nesta despesa.");
         }
         emAberto.forEach(d -> d.cobrar(LocalDate.now(), vencimento));
-        return DespesaResponse.de(despesa, solicitanteId);
+        return DespesaResponse.de(despesa, grupos.idDoGrupo(solicitanteId));
     }
 
     @Transactional
@@ -155,7 +179,7 @@ public class DespesaService {
     /** A despesa só existe para quem pagou ou participa; para os demais, é como se não existisse (404). */
     private Despesa despesaVisivel(Long casaId, Long despesaId, Long solicitanteId) {
         Despesa despesa = buscarDespesa(casaId, despesaId);
-        if (!despesa.envolve(solicitanteId)) {
+        if (!despesa.envolve(grupos.idDoGrupo(solicitanteId))) {
             throw new RecursoNaoEncontradoException("Despesa", despesaId);
         }
         return despesa;
@@ -174,7 +198,7 @@ public class DespesaService {
     private Divisao divisaoDoPagador(Long divisaoId, Long solicitanteId) {
         Divisao divisao = buscarDivisao(divisaoId);
         boolean ehPagador = divisao.getDespesa().getPagador().getId().equals(solicitanteId);
-        boolean ehDevedor = divisao.getDevedor().getId().equals(solicitanteId);
+        boolean ehDevedor = divisao.getDevedor().idDoGrupo().equals(grupos.idDoGrupo(solicitanteId));
         if (!ehPagador && !ehDevedor) {
             throw new RecursoNaoEncontradoException("Divisão", divisaoId);
         }
@@ -189,13 +213,13 @@ public class DespesaService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Divisão", divisaoId));
     }
 
-    private Morador buscarMoradorAtivo(Long casaId, Long moradorId) {
+    Morador buscarMoradorAtivo(Long casaId, Long moradorId) {
         return moradores.findByIdAndCasaId(moradorId, casaId)
                 .filter(Morador::isAtivo)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Morador", moradorId));
     }
 
-    private List<Morador> buscarParticipantes(Long casaId, List<Long> ids) {
+    List<Morador> buscarParticipantes(Long casaId, List<Long> ids) {
         List<Long> idsUnicos = ids.stream().distinct().toList();
         List<Morador> encontrados = moradores.findByIdInAndCasaId(idsUnicos, casaId).stream()
                 .filter(Morador::isAtivo)

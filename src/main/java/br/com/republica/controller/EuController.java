@@ -7,6 +7,7 @@ import br.com.republica.dto.Dtos.PerfilResponse;
 import br.com.republica.model.Morador;
 import br.com.republica.seguranca.AutorizacaoService;
 import br.com.republica.service.CasaService;
+import br.com.republica.service.ContaFixaService;
 import br.com.republica.service.PainelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,18 +26,23 @@ public class EuController {
     private final AutorizacaoService autorizacao;
     private final CasaService casaService;
     private final PainelService painelService;
+    private final ContaFixaService contaFixaService;
 
-    public EuController(AutorizacaoService autorizacao, CasaService casaService, PainelService painelService) {
+    public EuController(AutorizacaoService autorizacao, CasaService casaService, PainelService painelService,
+                        ContaFixaService contaFixaService) {
         this.autorizacao = autorizacao;
         this.casaService = casaService;
         this.painelService = painelService;
+        this.contaFixaService = contaFixaService;
     }
 
     @GetMapping
-    @Operation(summary = "Quem sou eu e qual é a minha casa")
+    @Operation(summary = "Quem sou eu e qual é a minha casa",
+            description = "Também cria as despesas das contas fixas que venceram (não há agendador).")
     public PerfilResponse perfil(@AuthenticationPrincipal Jwt jwt) {
         Morador eu = autorizacao.logado(jwt);
         Long casaId = Long.valueOf(jwt.getClaimAsString("casaId"));
+        contaFixaService.gerarPendentes(casaId);
         return new PerfilResponse(MoradorResponse.de(eu), casaService.buscar(casaId));
     }
 

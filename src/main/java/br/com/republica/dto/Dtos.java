@@ -1,6 +1,7 @@
 package br.com.republica.dto;
 
 import br.com.republica.model.Casa;
+import br.com.republica.model.ContaFixa;
 import br.com.republica.model.Despesa;
 import br.com.republica.model.Divisao;
 import br.com.republica.model.Morador;
@@ -8,6 +9,8 @@ import br.com.republica.model.StatusDivisao;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -39,7 +42,32 @@ public final class Dtos {
             @NotNull(message = "O valor é obrigatório")
             @DecimalMin(value = "0.01", message = "O valor deve ser maior que zero") BigDecimal valorTotal,
             @Schema(description = "Se omitida, usa a data de hoje", example = "2026-10-02") LocalDate data,
+            @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds,
+            @Schema(description = "true: quem paga junto com outro morador é cobrado separado nesta despesa")
+            Boolean cobrarSeparado) {
+
+        public DespesaRequest(String descricao, BigDecimal valorTotal, LocalDate data, List<Long> participantesIds) {
+            this(descricao, valorTotal, data, participantesIds, false);
+        }
+
+        public boolean separar() {
+            return Boolean.TRUE.equals(cobrarSeparado);
+        }
+    }
+
+    public record ContaFixaRequest(
+            @NotBlank(message = "A descrição é obrigatória") @Size(max = 120) String descricao,
+            @NotNull(message = "O valor é obrigatório")
+            @DecimalMin(value = "0.01", message = "O valor deve ser maior que zero") BigDecimal valor,
+            @Schema(description = "Dia do mês em que a conta vence (1 a 28)", example = "5")
+            @NotNull(message = "O dia do mês é obrigatório")
+            @Min(value = 1, message = "O dia deve estar entre 1 e 28")
+            @Max(value = 28, message = "O dia deve estar entre 1 e 28") Integer diaDoMes,
             @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds) {
+    }
+
+    public record ResponsavelRequest(
+            @Schema(description = "Quem paga junto; null desfaz o agrupamento") Long responsavelId) {
     }
 
     public record CobrancaRequest(
@@ -72,9 +100,20 @@ public final class Dtos {
 
     // ---------- saída ----------
 
-    public record MoradorResponse(Long id, String nome, boolean ativo, boolean admin) {
+    public record MoradorResponse(Long id, String nome, boolean ativo, boolean admin, Long responsavelId) {
         public static MoradorResponse de(Morador m) {
-            return new MoradorResponse(m.getId(), m.getNome(), m.isAtivo(), m.isAdmin());
+            return new MoradorResponse(m.getId(), m.getNome(), m.isAtivo(), m.isAdmin(),
+                    m.getResponsavel() != null ? m.getResponsavel().getId() : null);
+        }
+    }
+
+    public record ContaFixaResponse(Long id, String descricao, BigDecimal valor, int diaDoMes, boolean ativa,
+                                    LocalDate proximoVencimento, MoradorResponse pagador,
+                                    List<MoradorResponse> participantes) {
+        public static ContaFixaResponse de(ContaFixa c) {
+            return new ContaFixaResponse(c.getId(), c.getDescricao(), c.getValor(), c.getDiaDoMes(), c.isAtiva(),
+                    c.getProximoVencimento(), MoradorResponse.de(c.getPagador()),
+                    c.getParticipantes().stream().map(MoradorResponse::de).toList());
         }
     }
 
@@ -114,10 +153,10 @@ public final class Dtos {
          * Quem pagou vê todas as divisões da despesa; os demais veem apenas a própria parte.
          * É aqui que a privacidade entre moradores é garantida na resposta.
          */
-        public static DespesaResponse de(Despesa d, Long visorId) {
-            boolean visorPagou = d.getPagador().getId().equals(visorId);
+        public static DespesaResponse de(Despesa d, Long visorGrupoId) {
+            boolean visorPagou = d.getPagador().idDoGrupo().equals(visorGrupoId);
             List<DivisaoResponse> visiveis = d.getDivisoes().stream()
-                    .filter(div -> visorPagou || div.getDevedor().getId().equals(visorId))
+                    .filter(div -> visorPagou || div.getDevedor().idDoGrupo().equals(visorGrupoId))
                     .map(DivisaoResponse::de)
                     .toList();
             return new DespesaResponse(d.getId(), d.getDescricao(), d.getValorTotal(), d.getData(),

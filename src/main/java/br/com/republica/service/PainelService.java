@@ -19,18 +19,21 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A "Minha visão": tudo o que um morador enxerga sobre dinheiro. Todas as consultas partem de
- * {@link DivisaoRepository#findEmAbertoDoMorador}, que só devolve dívidas em que ele participa.
+ * {@link DivisaoRepository#findEmAbertoDoGrupo}, que só devolve dívidas em que ele participa.
  */
 @Service
 public class PainelService {
 
     private final DivisaoRepository divisoes;
+    private final GrupoService grupos;
 
-    public PainelService(DivisaoRepository divisoes) {
+    public PainelService(DivisaoRepository divisoes, GrupoService grupos) {
         this.divisoes = divisoes;
+        this.grupos = grupos;
     }
 
     /** Quanto o morador deve e quanto tem a receber, por pessoa, já compensando os dois sentidos. */
@@ -39,8 +42,9 @@ public class PainelService {
         Map<Long, Morador> pessoas = new LinkedHashMap<>();
         Map<Long, List<ItemDeAcertoResponse>> itensPorPessoa = new LinkedHashMap<>();
 
-        for (Divisao d : divisoes.findEmAbertoDoMorador(casaId, moradorId)) {
-            boolean euDevo = d.getDevedor().getId().equals(moradorId);
+        Set<Long> meuGrupo = grupos.idsDoGrupo(casaId, moradorId);
+        for (Divisao d : divisoes.findEmAbertoDoGrupo(casaId, meuGrupo)) {
+            boolean euDevo = meuGrupo.contains(d.getDevedor().getId());
             Morador outro = euDevo ? d.getDespesa().getPagador() : d.getDevedor();
             BigDecimal valor = euDevo ? d.getValor().negate() : d.getValor();
             pessoas.putIfAbsent(outro.getId(), outro);
@@ -70,14 +74,15 @@ public class PainelService {
     /** As partes em aberto, separadas em "eu devo" e "me devem". */
     @Transactional(readOnly = true)
     public MinhasDividasResponse minhasDividas(Long casaId, Long moradorId) {
-        List<Divisao> abertas = new ArrayList<>(divisoes.findEmAbertoDoMorador(casaId, moradorId));
+        Set<Long> meuGrupo = grupos.idsDoGrupo(casaId, moradorId);
+        List<Divisao> abertas = new ArrayList<>(divisoes.findEmAbertoDoGrupo(casaId, meuGrupo));
         abertas.sort(Comparator.comparing((Divisao d) -> d.getDespesa().getData())
                 .thenComparing(Divisao::getId).reversed());
 
         List<DividaResponse> euDevo = new ArrayList<>();
         List<DividaResponse> meDevem = new ArrayList<>();
         for (Divisao d : abertas) {
-            boolean devoEsta = d.getDevedor().getId().equals(moradorId);
+            boolean devoEsta = meuGrupo.contains(d.getDevedor().getId());
             Morador pessoa = devoEsta ? d.getDespesa().getPagador() : d.getDevedor();
             DividaResponse divida = new DividaResponse(d.getId(), d.getDespesa().getId(),
                     d.getDespesa().getDescricao(), d.getDespesa().getData(), MoradorResponse.de(pessoa),

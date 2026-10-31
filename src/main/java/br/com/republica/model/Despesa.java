@@ -57,10 +57,13 @@ public class Despesa {
         return divisoes.stream().anyMatch(d -> d.getStatus() != StatusDivisao.PAGA);
     }
 
-    /** Verdadeiro se o morador pagou esta despesa ou tem uma parte dela. */
-    public boolean envolve(Long moradorId) {
-        return pagador.getId().equals(moradorId)
-                || divisoes.stream().anyMatch(d -> d.getDevedor().getId().equals(moradorId));
+    /**
+     * Verdadeiro se o grupo do morador (ele e quem paga junto com ele) pagou esta despesa ou tem parte dela.
+     * Recebe o id do grupo: o do responsável, ou o do próprio morador quando não há agrupamento.
+     */
+    public boolean envolve(Long grupoId) {
+        return pagador.idDoGrupo().equals(grupoId)
+                || divisoes.stream().anyMatch(d -> d.getDevedor().idDoGrupo().equals(grupoId));
     }
 
     public Long getId() {

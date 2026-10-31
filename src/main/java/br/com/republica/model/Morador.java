@@ -23,6 +23,13 @@ public class Morador {
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private Casa casa;
 
+    /**
+     * Quando preenchido, este morador paga junto com o responsável (ex.: irmãs que dividem a parte):
+     * a parte dele nas despesas é somada à do responsável, e os dois enxergam a dívida do grupo.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Morador responsavel;
+
     protected Morador() {
     }
 
@@ -57,6 +64,19 @@ public class Morador {
 
     public void setAdmin(boolean admin) {
         this.admin = admin;
+    }
+
+    public Morador getResponsavel() {
+        return responsavel;
+    }
+
+    public void setResponsavel(Morador responsavel) {
+        this.responsavel = responsavel;
+    }
+
+    /** Id do "dono" do grupo: o responsável, se houver, ou o próprio morador. */
+    public Long idDoGrupo() {
+        return responsavel != null ? responsavel.getId() : id;
     }
 
     public Casa getCasa() {

@@ -60,8 +60,20 @@ export const api = {
     renomearCasa: (id, nome) => request(`/casas/${id}`, { method: 'PUT', body: { nome } }),
     adicionarMorador: (casaId, nome) =>
         request(`/casas/${casaId}/moradores`, { method: 'POST', body: { nome } }),
+    definirResponsavel: (casaId, moradorId, responsavelId) =>
+        request(`/casas/${casaId}/moradores/${moradorId}/responsavel`, { method: 'PUT', body: { responsavelId } }),
     removerMorador: (casaId, moradorId) =>
         request(`/casas/${casaId}/moradores/${moradorId}`, { method: 'DELETE' }),
+
+    // contas fixas (repetem todo mês)
+    listarContasFixas: (casaId) => request(`/casas/${casaId}/contas-fixas`),
+    criarContaFixa: (casaId, conta) =>
+        request(`/casas/${casaId}/contas-fixas`, { method: 'POST', body: conta }),
+    editarContaFixa: (casaId, id, conta) =>
+        request(`/casas/${casaId}/contas-fixas/${id}`, { method: 'PUT', body: conta }),
+    pausarContaFixa: (casaId, id) => request(`/casas/${casaId}/contas-fixas/${id}/pausar`, { method: 'POST' }),
+    retomarContaFixa: (casaId, id) => request(`/casas/${casaId}/contas-fixas/${id}/retomar`, { method: 'POST' }),
+    excluirContaFixa: (casaId, id) => request(`/casas/${casaId}/contas-fixas/${id}`, { method: 'DELETE' }),
 
     // despesas e cobranças
     listarDespesas: (casaId, mes) =>
