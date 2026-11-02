@@ -9,8 +9,72 @@ import { moradoresAtivos, nomeDoGrupo } from './moradores.js';
 const emAberto = (despesa) => despesa.divisoes.filter((d) => !d.parteDoPagador && d.status !== 'PAGA');
 const deOutros = (despesa) => despesa.divisoes.filter((d) => !d.parteDoPagador);
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro',
+    'Novembro', 'Dezembro'];
+
+/** O vencimento mais próximo entre as partes em aberto que eu enxergo, ou null. */
+function proximoVencimento(despesa) {
+    const datas = despesa.divisoes.filter((d) => !d.parteDoPagador && d.status !== 'PAGA' && d.vencimento)
+        .map((d) => d.vencimento).sort();
+    return datas[0] ?? null;
+}
+
+/** Histórico: todas as despesas que eu enxergo, agrupadas por mês (o mais recente primeiro). */
+function viewHistorico({ state }) {
+    const corpo = h('div', { class: 'stack' }, h('p', { class: 'dica' }, 'Carregando…'));
+    api.listarDespesas(state.casa.id).then((todas) => {
+        if (todas.length === 0) {
+            corpo.replaceChildren(h('div', { class: 'card vazio' }, h('strong', {}, 'Ainda não há histórico'),
+                'Quando houver despesas, elas aparecem aqui, organizadas por mês.'));
+            return;
+        }
+        const porMes = new Map();
+        todas.forEach((d) => {
+            const mes = d.data.slice(0, 7);
+            if (!porMes.has(mes)) porMes.set(mes, []);
+            porMes.get(mes).push(d);
+        });
+        const meses = [...porMes.keys()].sort().reverse();
+        corpo.replaceChildren(...meses.map((mes, i) => {
+            const lista = porMes.get(mes);
+            const total = lista.reduce((soma, d) => soma + centavos(d.valorTotal), 0);
+            const [ano, m] = mes.split('-');
+            return h('details', { class: 'card mes-historico', open: i === 0 },
+                h('summary', {},
+                    h('span', { class: 'mes-nome' }, `${MESES[Number(m) - 1]} ${ano}`),
+                    h('span', { class: 'dica' }, `${lista.length} ${lista.length === 1 ? 'despesa' : 'despesas'}`),
+                    h('strong', { class: 'num' }, brl(total / 100))),
+                h('div', { class: 'historico-lista' }, lista.map((d) => linhaHistorico(d, state))));
+        }));
+    }).catch((erro) => corpo.replaceChildren(h('p', { class: 'field-error' }, erro.message)));
+    return corpo;
+}
+
+function linhaHistorico(despesa, state) {
+    const souPagador = despesa.pagador.id === state.eu.id;
+    const vence = proximoVencimento(despesa);
+    const criada = despesa.criadaEm ?? despesa.data;
+    return h('div', { class: 'historico-linha' },
+        h('div', {},
+            h('div', { class: 'nome' }, despesa.descricao),
+            h('div', { class: 'dica' }, `${souPagador ? 'Você pagou' : `${despesa.pagador.nome} pagou`} · ${dataBR(despesa.data, false)}`),
+            h('div', { class: 'dica' }, `Criada em ${dataBR(criada, false)}${vence ? ` · vence ${dataBR(vence, false)}` : ''}`)),
+        h('div', { class: 'direita' },
+            h('strong', { class: 'num' }, brl(despesa.valorTotal)),
+            h('div', { class: `badge ${despesa.quitada ? 'paga' : 'pendente'}` }, despesa.quitada ? 'Quitada' : 'Em aberto')));
+}
+
 export function viewDespesas(ctx) {
     const { state, recarregar } = ctx;
+    state.visaoDespesas ??= 'mes';
+    const verHistorico = state.visaoDespesas === 'historico';
+    const escolher = (visao) => () => { state.visaoDespesas = visao; ctx.redesenhar(); };
+    const seletor = h('div', { class: 'segmentado', role: 'tablist', 'aria-label': 'Forma de ver as despesas' },
+        h('button', { type: 'button', role: 'tab', 'aria-selected': String(!verHistorico), onclick: escolher('mes') }, 'Por mês'),
+        h('button', { type: 'button', role: 'tab', 'aria-selected': String(verHistorico), onclick: escolher('historico') }, 'Histórico'));
+    if (verHistorico) {
+        return h('section', { 'aria-label': 'Histórico de despesas' }, seletor, viewHistorico(ctx));
+    }
     const podeCriar = moradoresAtivos(state).length >= 2;
 
     async function mudarMes(delta) {
@@ -27,6 +91,7 @@ export function viewDespesas(ctx) {
             onclick: () => abrirNovaDespesa(ctx) }, '+ Nova despesa'));
 
     return h('section', { 'aria-label': 'Despesas do mês' },
+        seletor,
         cabecalho,
         !podeCriar && h('div', { class: 'card vazio' },
             h('strong', {}, 'Adicione os moradores primeiro'),
@@ -79,7 +144,9 @@ function cartaoDespesa(despesa, ctx) {
             h('div', {},
                 h('h3', { class: 'despesa-titulo' }, despesa.descricao),
                 h('p', { class: 'despesa-meta' },
-                    `${souPagador ? 'Você pagou' : `${despesa.pagador.nome} pagou`} · ${dataBR(despesa.data)}`)),
+                    `${souPagador ? 'Você pagou' : `${despesa.pagador.nome} pagou`} · ${dataBR(despesa.data)}`),
+                despesa.criadaEm && despesa.criadaEm !== despesa.data
+                    && h('p', { class: 'dica' }, `Registrada em ${dataBR(despesa.criadaEm)}`)),
             h('div', { class: 'despesa-total num' }, brl(despesa.valorTotal))),
 
         souPagador && h('div', { class: 'progresso', role: 'progressbar', 'aria-valuenow': percentual,

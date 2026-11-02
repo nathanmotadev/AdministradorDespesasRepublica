@@ -151,7 +151,9 @@ public final class Dtos {
                                   MoradorResponse pagador, boolean quitada, List<DivisaoResponse> divisoes,
                                   @Schema(description = "Quem participou (só para quem pagou, para editar)")
                                   List<Long> participantesIds,
-                                  boolean cobrarSeparado) {
+                                  boolean cobrarSeparado,
+                                  @Schema(description = "Dia em que foi registrada; nulo nas despesas antigas")
+                                  LocalDate criadaEm) {
         /**
          * Quem pagou vê todas as divisões da despesa; os demais veem apenas a própria parte.
          * É aqui que a privacidade entre moradores é garantida na resposta.
@@ -168,7 +170,7 @@ public final class Dtos {
                     : d.getDivisoes().stream().map(div -> div.getDevedor().getId()).toList();
             return new DespesaResponse(d.getId(), d.getDescricao(), d.getValorTotal(), d.getData(),
                     MoradorResponse.de(d.getPagador()), !d.temPendencias(), visiveis,
-                    participantes, d.isCobrarSeparado());
+                    participantes, d.isCobrarSeparado(), d.getCriadaEm());
         }
     }
 
@@ -202,7 +204,7 @@ public final class Dtos {
     @Schema(description = "Uma parte em aberto; 'pessoa' é a outra ponta da dívida")
     public record DividaResponse(Long divisaoId, Long despesaId, String descricao, LocalDate data,
                                  MoradorResponse pessoa, BigDecimal valor, StatusDivisao status,
-                                 LocalDate vencimento, boolean atrasada) {
+                                 LocalDate vencimento, boolean atrasada, LocalDate criadaEm) {
     }
 
     public record MinhasDividasResponse(List<DividaResponse> euDevo, List<DividaResponse> meDevem) {

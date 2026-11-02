@@ -32,73 +32,73 @@ class CenariosDaRepublicaTest {
     @Autowired AcertoService acertoService;
 
     Long casaId;
-    MoradorResponse nathan, larissa, matheus, camilly;
+    MoradorResponse nathan, caio, duda, bia;
 
     @BeforeEach
     void criarCasaComQuatroMoradores() {
         casaId = casaService.criar(new CasaRequest("Casa da Vila")).id();
         nathan = casaService.adicionarMorador(casaId, new MoradorRequest("Nathan"));
-        larissa = casaService.adicionarMorador(casaId, new MoradorRequest("Larissa"));
-        matheus = casaService.adicionarMorador(casaId, new MoradorRequest("Matheus"));
-        camilly = casaService.adicionarMorador(casaId, new MoradorRequest("Camilly"));
+        caio = casaService.adicionarMorador(casaId, new MoradorRequest("Caio"));
+        duda = casaService.adicionarMorador(casaId, new MoradorRequest("Duda"));
+        bia = casaService.adicionarMorador(casaId, new MoradorRequest("Bia"));
     }
 
     @Test
     void mercadoDivididoEntreTodos() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio, duda, bia);
 
         assertThat(mercado.divisoes()).hasSize(4);
         assertThat(mercado.divisoes()).allMatch(d -> d.valor().compareTo(new BigDecimal("50.00")) == 0);
         assertThat(divisaoDe(mercado, nathan).status()).isEqualTo(StatusDivisao.PAGA);
-        assertThat(divisaoDe(mercado, larissa).status()).isEqualTo(StatusDivisao.PENDENTE);
+        assertThat(divisaoDe(mercado, caio).status()).isEqualTo(StatusDivisao.PENDENTE);
 
         assertThat(acertos())
                 .extracting(a -> a.de().nome() + ">" + a.para().nome() + ":" + a.valor())
-                .containsExactlyInAnyOrder("Camilly>Nathan:50.00", "Larissa>Nathan:50.00", "Matheus>Nathan:50.00");
+                .containsExactlyInAnyOrder("Bia>Nathan:50.00", "Caio>Nathan:50.00", "Duda>Nathan:50.00");
     }
 
     @Test
     void pizzaSoComQuemParticipou() {
-        DespesaResponse pizza = despesa("Pizza", "90.00", nathan, nathan, larissa, camilly);
+        DespesaResponse pizza = despesa("Pizza", "90.00", nathan, nathan, caio, bia);
 
         assertThat(pizza.divisoes()).hasSize(3);
-        assertThat(pizza.divisoes()).noneMatch(d -> d.devedor().id().equals(matheus.id()));
+        assertThat(pizza.divisoes()).noneMatch(d -> d.devedor().id().equals(duda.id()));
         assertThat(acertos())
                 .extracting(a -> a.de().nome() + ">" + a.para().nome() + ":" + a.valor())
-                .containsExactlyInAnyOrder("Camilly>Nathan:30.00", "Larissa>Nathan:30.00");
+                .containsExactlyInAnyOrder("Bia>Nathan:30.00", "Caio>Nathan:30.00");
     }
 
     @Test
     void dividasEmSentidosOpostosSaoCompensadas() {
-        despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);        // Matheus deve 50 a Nathan
-        despesa("Conta de luz", "240.00", matheus, nathan, larissa, matheus, camilly);  // Nathan deve 60 a Matheus
+        despesa("Mercado", "200.00", nathan, nathan, caio, duda, bia);        // Duda deve 50 a Nathan
+        despesa("Conta de luz", "240.00", duda, nathan, caio, duda, bia);  // Nathan deve 60 a Duda
 
         List<AcertoResponse> acertos = acertos();
 
         assertThat(acertos)
-                .filteredOn(a -> a.de().id().equals(nathan.id()) && a.para().id().equals(matheus.id()))
+                .filteredOn(a -> a.de().id().equals(nathan.id()) && a.para().id().equals(duda.id()))
                 .singleElement()
                 .satisfies(a -> assertThat(a.valor()).isEqualByComparingTo("10.00"));
-        assertThat(acertos).noneMatch(a -> a.de().id().equals(matheus.id()) && a.para().id().equals(nathan.id()));
+        assertThat(acertos).noneMatch(a -> a.de().id().equals(duda.id()) && a.para().id().equals(nathan.id()));
     }
 
     @Test
     void cobrarEReceberAtualizaOsAcertos() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
-        Long divisaoDaLarissa = divisaoDe(mercado, larissa).id();
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio, duda, bia);
+        Long divisaoDaCaio = divisaoDe(mercado, caio).id();
 
-        DivisaoResponse cobrada = despesaService.cobrar(divisaoDaLarissa, LocalDate.now().plusDays(5), nathan.id());
+        DivisaoResponse cobrada = despesaService.cobrar(divisaoDaCaio, LocalDate.now().plusDays(5), nathan.id());
         assertThat(cobrada.status()).isEqualTo(StatusDivisao.COBRADA);
         assertThat(cobrada.vencimento()).isEqualTo(LocalDate.now().plusDays(5));
 
-        DivisaoResponse paga = despesaService.registrarPagamento(divisaoDaLarissa, nathan.id());
+        DivisaoResponse paga = despesaService.registrarPagamento(divisaoDaCaio, nathan.id());
         assertThat(paga.status()).isEqualTo(StatusDivisao.PAGA);
-        assertThat(acertos()).noneMatch(a -> a.de().id().equals(larissa.id()));
+        assertThat(acertos()).noneMatch(a -> a.de().id().equals(caio.id()));
     }
 
     @Test
     void naoCobraAParteDeQuemPagou() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio);
 
         assertThatThrownBy(() -> despesaService.cobrar(divisaoDe(mercado, nathan).id(), null, nathan.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
@@ -121,8 +121,8 @@ class CenariosDaRepublicaTest {
 
     @Test
     void despesaComPagamentoNaoPodeSerExcluida() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
-        despesaService.registrarPagamento(divisaoDe(mercado, larissa).id(), nathan.id());
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio);
+        despesaService.registrarPagamento(divisaoDe(mercado, caio).id(), nathan.id());
 
         assertThatThrownBy(() -> despesaService.excluir(casaId, mercado.id(), nathan.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
@@ -130,54 +130,54 @@ class CenariosDaRepublicaTest {
 
     @Test
     void moradorComDividaNaoPodeSair() {
-        despesa("Mercado", "200.00", nathan, nathan, larissa);
+        despesa("Mercado", "200.00", nathan, nathan, caio);
 
-        assertThatThrownBy(() -> casaService.desativarMorador(casaId, larissa.id()))
+        assertThatThrownBy(() -> casaService.desativarMorador(casaId, caio.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
     }
 
     @Test
     void editarValorEParticipantesRecalculaADivisao() {
-        DespesaResponse mercado = despesa("Mercado", "250.00", nathan, nathan, larissa);
+        DespesaResponse mercado = despesa("Mercado", "250.00", nathan, nathan, caio);
 
         DespesaResponse editada = despesaService.editar(casaId, mercado.id(),
                 new DespesaRequest("Mercado do mês", new BigDecimal("90.00"), null,
-                        List.of(nathan.id(), matheus.id(), camilly.id())), nathan.id());
+                        List.of(nathan.id(), duda.id(), bia.id())), nathan.id());
 
         assertThat(editada.descricao()).isEqualTo("Mercado do mês");
-        assertThat(editada.divisoes()).noneMatch(d -> d.devedor().id().equals(larissa.id()));
+        assertThat(editada.divisoes()).noneMatch(d -> d.devedor().id().equals(caio.id()));
         assertThat(acertos())
                 .extracting(a -> a.de().nome() + ">" + a.para().nome() + ":" + a.valor())
-                .containsExactlyInAnyOrder("Camilly>Nathan:30.00", "Matheus>Nathan:30.00");
+                .containsExactlyInAnyOrder("Bia>Nathan:30.00", "Duda>Nathan:30.00");
     }
 
     @Test
     void editarDepoisDePagoMantemQuemNaoMudouEReabreQuemMudou() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
-        despesaService.registrarPagamento(divisaoDe(mercado, larissa).id(), nathan.id());
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio, duda, bia);
+        despesaService.registrarPagamento(divisaoDe(mercado, caio).id(), nathan.id());
 
-        // só a descrição muda: a Larissa continua quitada
+        // só a descrição muda: a Caio continua quitada
         DespesaResponse soDescricao = despesaService.editar(casaId, mercado.id(),
                 new DespesaRequest("Feira", new BigDecimal("200.00"), null,
-                        List.of(nathan.id(), larissa.id(), matheus.id(), camilly.id())), nathan.id());
-        assertThat(divisaoDe(soDescricao, larissa).status()).isEqualTo(StatusDivisao.PAGA);
+                        List.of(nathan.id(), caio.id(), duda.id(), bia.id())), nathan.id());
+        assertThat(divisaoDe(soDescricao, caio).status()).isEqualTo(StatusDivisao.PAGA);
 
-        // sai a Camilly: a parte da Larissa sobe para 66,67 e volta a ficar em aberto
-        DespesaResponse semCamilly = despesaService.editar(casaId, mercado.id(),
+        // sai a Bia: a parte da Caio sobe para 66,67 e volta a ficar em aberto
+        DespesaResponse semBia = despesaService.editar(casaId, mercado.id(),
                 new DespesaRequest("Feira", new BigDecimal("200.00"), null,
-                        List.of(nathan.id(), larissa.id(), matheus.id())), nathan.id());
-        assertThat(divisaoDe(semCamilly, larissa).status()).isEqualTo(StatusDivisao.PENDENTE);
-        assertThat(semCamilly.divisoes()).hasSize(3);
-        assertThat(semCamilly.participantesIds()).containsExactlyInAnyOrder(nathan.id(), larissa.id(), matheus.id());
+                        List.of(nathan.id(), caio.id(), duda.id())), nathan.id());
+        assertThat(divisaoDe(semBia, caio).status()).isEqualTo(StatusDivisao.PENDENTE);
+        assertThat(semBia.divisoes()).hasSize(3);
+        assertThat(semBia.participantesIds()).containsExactlyInAnyOrder(nathan.id(), caio.id(), duda.id());
     }
 
     @Test
     void soQuemPagouEditaADespesa() {
-        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, larissa);
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio);
 
         assertThatThrownBy(() -> despesaService.editar(casaId, mercado.id(),
-                new DespesaRequest("Mercado", new BigDecimal("10.00"), null, List.of(nathan.id(), larissa.id())),
-                larissa.id()))
+                new DespesaRequest("Mercado", new BigDecimal("10.00"), null, List.of(nathan.id(), caio.id())),
+                caio.id()))
                 .isInstanceOf(br.com.republica.exception.AcessoNegadoException.class);
     }
 

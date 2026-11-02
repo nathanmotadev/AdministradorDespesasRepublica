@@ -4,7 +4,7 @@ import { avatar, executar } from '../components.js';
 
 export const moradoresAtivos = (state) => state.casa.moradores.filter((m) => m.ativo);
 
-/** "Larissa e Camilly" quando o morador tem alguém que paga junto com ele; senão, só o nome. */
+/** "Caio e Bia" quando o morador tem alguém que paga junto com ele; senão, só o nome. */
 export function nomeDoGrupo(state, morador) {
     const raiz = morador.responsavelId ?? morador.id;
     const grupo = moradoresAtivos(state).filter((m) => m.id === raiz || m.responsavelId === raiz)

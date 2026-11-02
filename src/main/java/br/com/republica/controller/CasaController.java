@@ -10,6 +10,7 @@ import br.com.republica.exception.RegraDeNegocioException;
 import br.com.republica.model.Morador;
 import br.com.republica.seguranca.AutorizacaoService;
 import br.com.republica.service.CasaService;
+import br.com.republica.service.ExclusaoDeCasaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,8 +29,10 @@ public class CasaController {
 
     private final CasaService casaService;
     private final AutorizacaoService autorizacao;
+    private final ExclusaoDeCasaService exclusao;
 
-    public CasaController(CasaService casaService, AutorizacaoService autorizacao) {
+    public CasaController(CasaService casaService, AutorizacaoService autorizacao, ExclusaoDeCasaService exclusao) {
+        this.exclusao = exclusao;
         this.casaService = casaService;
         this.autorizacao = autorizacao;
     }
@@ -47,6 +50,16 @@ public class CasaController {
                                  @AuthenticationPrincipal Jwt jwt) {
         autorizacao.administradorDaCasa(jwt, casaId);
         return casaService.renomear(casaId, request);
+    }
+
+    @DeleteMapping("/{casaId}")
+    @Operation(summary = "Exclui a casa e tudo o que é dela (administrador; só sem dívidas em aberto)",
+            description = "Irreversível. Exige o nome exato da casa em 'confirmacao'.")
+    public ResponseEntity<Void> excluir(@PathVariable Long casaId, @RequestParam String confirmacao,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        autorizacao.administradorDaCasa(jwt, casaId);
+        exclusao.excluir(casaId, confirmacao);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{casaId}/convite")

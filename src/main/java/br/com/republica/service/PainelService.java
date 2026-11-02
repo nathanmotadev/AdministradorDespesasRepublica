@@ -86,7 +86,8 @@ public class PainelService {
             Morador pessoa = devoEsta ? d.getDespesa().getPagador() : d.getDevedor();
             DividaResponse divida = new DividaResponse(d.getId(), d.getDespesa().getId(),
                     d.getDespesa().getDescricao(), d.getDespesa().getData(), MoradorResponse.de(pessoa),
-                    d.getValor(), d.getStatus(), d.getVencimento(), d.isAtrasada(LocalDate.now()));
+                    d.getValor(), d.getStatus(), d.getVencimento(), d.isAtrasada(LocalDate.now()),
+                    d.getDespesa().getCriadaEm());
             (devoEsta ? euDevo : meDevem).add(divida);
         }
         return new MinhasDividasResponse(euDevo, meDevem);

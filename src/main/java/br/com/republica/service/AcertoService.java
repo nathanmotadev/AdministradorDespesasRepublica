@@ -20,8 +20,8 @@ import java.util.Map;
 
 /**
  * Calcula "quem deve quanto a quem". Dívidas nos dois sentidos entre a mesma dupla
- * são compensadas: se Larissa deve R$ 50 a Nathan e Nathan deve R$ 20 a Larissa,
- * o acerto é Larissa pagar R$ 30 a Nathan.
+ * são compensadas: se Caio deve R$ 50 a Nathan e Nathan deve R$ 20 a Caio,
+ * o acerto é Caio pagar R$ 30 a Nathan.
  */
 @Service
 public class AcertoService {

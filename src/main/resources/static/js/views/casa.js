@@ -13,7 +13,8 @@ export function viewCasa(ctx) {
         state.eu.admin && cartaoConvite(ctx),
         cartaoContasFixas(ctx),
         viewMoradores(ctx),
-        cartaoConta(ctx));
+        cartaoConta(ctx),
+        state.eu.admin && cartaoExcluir(ctx));
 }
 
 function cartaoCasa({ state, recarregar }) {
@@ -78,4 +79,46 @@ function cartaoConta({ state, sair }) {
             h('div', { class: 'nome' }, state.eu.nome, h('div', { class: 'dica' },
                 state.eu.admin ? 'Administrador da casa' : 'Morador')),
             h('button', { class: 'btn', type: 'button', onclick: sair }, 'Sair')));
+}
+
+/** Zona de perigo (só administrador): excluir a casa exige digitar o nome dela. */
+function cartaoExcluir({ state, sair }) {
+    function abrir() {
+        const erro = h('p', { class: 'field-error', role: 'alert' });
+        const campo = h('input', { type: 'text', autocomplete: 'off', placeholder: state.casa.nome,
+            'aria-label': 'Nome da casa para confirmar' });
+        const botao = h('button', { class: 'btn danger', type: 'button', disabled: true, onclick: enviar }, 'Excluir para sempre');
+        const confere = () => campo.value.trim().toLowerCase() === state.casa.nome.trim().toLowerCase();
+        campo.addEventListener('input', () => { botao.disabled = !confere(); });
+
+        async function enviar() {
+            if (!confere()) return;
+            botao.disabled = true;
+            try {
+                await api.excluirCasa(state.casa.id, campo.value.trim());
+                fechar();
+                toast('Casa excluída');
+                sair();
+            } catch (e) {
+                erro.textContent = e.message;
+                botao.disabled = false;
+            }
+        }
+
+        const fechar = abrirModal({
+            titulo: 'Excluir a casa?',
+            corpo: h('div', {},
+                h('p', {}, 'Isso apaga a casa, os moradores, as despesas, as contas fixas e os logins. Não dá para desfazer.'),
+                h('p', { class: 'dica', style: 'margin:.5rem 0 .9rem' },
+                    'Só é possível quando ninguém tem valores a pagar ou a receber.'),
+                h('div', { class: 'field' }, h('label', {}, `Digite "${state.casa.nome}" para confirmar`), campo),
+                erro),
+            rodape: [h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'), botao],
+        });
+    }
+
+    return h('section', { class: 'card zona-perigo', 'aria-labelledby': 'titulo-perigo' },
+        h('h2', { id: 'titulo-perigo' }, 'Zona de perigo'),
+        h('p', { class: 'muted' }, 'Excluir a casa apaga todos os dados dela.'),
+        h('button', { class: 'btn danger', type: 'button', onclick: abrir }, 'Excluir casa'));
 }

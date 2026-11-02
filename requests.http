@@ -22,7 +22,7 @@ Authorization: Bearer {{token}}
 POST http://localhost:8080/api/auth/cadastro/convite
 Content-Type: application/json
 
-{ "codigoConvite": "CASA-XXXXXX", "nome": "Larissa", "email": "larissa@exemplo.com", "senha": "senha1234" }
+{ "codigoConvite": "CASA-XXXXXX", "nome": "Caio", "email": "caio@exemplo.com", "senha": "senha1234" }
 
 ### 5. Login
 POST http://localhost:8080/api/auth/login
