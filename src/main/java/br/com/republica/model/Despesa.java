@@ -47,6 +47,9 @@ public class Despesa {
     @JoinTable(name = "despesa_participante")
     private Set<Morador> participantes = new LinkedHashSet<>();
 
+    /** Dia em que a despesa foi registrada (a {@code data} é o dia do gasto, que pode ser anterior). Nulo nas antigas. */
+    private LocalDate criadaEm;
+
     /** Nulo em despesas antigas (equivale a falso). */
     private Boolean cobrarSeparado;
 
@@ -59,6 +62,7 @@ public class Despesa {
         this.data = data;
         this.casa = casa;
         this.pagador = pagador;
+        this.criadaEm = LocalDate.now();
     }
 
     public void adicionarDivisao(Divisao divisao) {
@@ -93,6 +97,10 @@ public class Despesa {
     public boolean envolve(Long grupoId) {
         return pagador.idDoGrupo().equals(grupoId)
                 || divisoes.stream().anyMatch(d -> d.getDevedor().idDoGrupo().equals(grupoId));
+    }
+
+    public LocalDate getCriadaEm() {
+        return criadaEm;
     }
 
     public Long getId() {

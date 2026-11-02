@@ -58,6 +58,8 @@ export const api = {
     // casa
     convite: (casaId) => request(`/casas/${casaId}/convite`),
     renomearCasa: (id, nome) => request(`/casas/${id}`, { method: 'PUT', body: { nome } }),
+    excluirCasa: (id, confirmacao) =>
+        request(`/casas/${id}?confirmacao=${encodeURIComponent(confirmacao)}`, { method: 'DELETE' }),
     adicionarMorador: (casaId, nome) =>
         request(`/casas/${casaId}/moradores`, { method: 'POST', body: { nome } }),
     definirResponsavel: (casaId, moradorId, responsavelId) =>

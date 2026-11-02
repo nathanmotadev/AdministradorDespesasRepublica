@@ -114,6 +114,13 @@ function grupoPessoa(grupo, souCredor, ctx) {
         h('div', { class: 'grupo-lista' }, dividas.map((d) => linhaDivida(d, souCredor, varias, ctx))));
 }
 
+/** "Criada em 10/10 · vence 15/10" (ou "sem vencimento" enquanto ninguém cobrou com prazo). */
+function datasDaDivida(divida) {
+    const criada = dataBR(divida.criadaEm ?? divida.data, false);
+    const vence = divida.vencimento ? `vence ${dataBR(divida.vencimento, false)}` : 'sem vencimento';
+    return `Criada em ${criada} · ${vence}`;
+}
+
 function linhaDivida(divida, souCredor, mostrarValor, ctx) {
     const { state, recarregar } = ctx;
     const data = dataBR(divida.data, false);
@@ -139,7 +146,7 @@ function linhaDivida(divida, souCredor, mostrarValor, ctx) {
     return h('div', { class: 'divida-linha' },
         h('div', { class: 'info' },
             h('div', { class: 'titulo' }, divida.descricao),
-            h('div', { class: 'sub' }, data),
+            h('div', { class: 'sub' }, datasDaDivida(divida)),
             badgeDivida(divida)),
         mostrarValor && h('div', { class: 'valor num' }, brl(divida.valor)),
         souCredor && h('div', { class: 'acoes' },

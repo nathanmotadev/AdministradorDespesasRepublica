@@ -384,3 +384,15 @@ textarea { resize: vertical; min-height: 84px; }
 .proxima .nome { font-weight: 600; }
 .proxima .direita { text-align: right; }
 .proxima.urgente .esq .dica { color: var(--danger, #b91c1c); }
+
+/* ---------- histórico por mês ---------- */
+.mes-historico summary { display: flex; align-items: center; gap: .6rem; cursor: pointer; list-style: none; }
+.mes-historico summary::-webkit-details-marker { display: none; }
+.mes-historico .mes-nome { font-weight: 700; flex: 1; }
+.historico-lista { display: grid; gap: .8rem; margin-top: .9rem; padding-top: .9rem; border-top: 1px solid var(--border, #e7e2d6); }
+.historico-linha { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; }
+.historico-linha .nome { font-weight: 600; }
+.historico-linha .direita { text-align: right; display: grid; gap: .25rem; justify-items: end; }
+
+.zona-perigo { border: 1px solid #f0c4bd; }
+.zona-perigo h2 { color: #b42318; }
