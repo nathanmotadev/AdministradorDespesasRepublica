@@ -33,40 +33,40 @@ class PrivacidadeDaVisaoTest {
     @Autowired PainelService painelService;
 
     Long casaId;
-    MoradorResponse nathan, larissa, matheus, camilly;
+    MoradorResponse nathan, caio, duda, bia;
     DespesaResponse mercado, luz, pizza;
 
     @BeforeEach
     void cenario() {
         casaId = casaService.criar(new CasaRequest("Casa da Vila")).id();
         nathan = casaService.adicionarMorador(casaId, new MoradorRequest("Nathan"));
-        larissa = casaService.adicionarMorador(casaId, new MoradorRequest("Larissa"));
-        matheus = casaService.adicionarMorador(casaId, new MoradorRequest("Matheus"));
-        camilly = casaService.adicionarMorador(casaId, new MoradorRequest("Camilly"));
+        caio = casaService.adicionarMorador(casaId, new MoradorRequest("Caio"));
+        duda = casaService.adicionarMorador(casaId, new MoradorRequest("Duda"));
+        bia = casaService.adicionarMorador(casaId, new MoradorRequest("Bia"));
 
-        mercado = despesa("Mercado", "200.00", nathan, nathan, larissa, matheus, camilly);
-        luz = despesa("Conta de luz", "240.00", matheus, nathan, larissa, matheus, camilly);
-        pizza = despesa("Pizza", "90.00", nathan, nathan, larissa, camilly);
+        mercado = despesa("Mercado", "200.00", nathan, nathan, caio, duda, bia);
+        luz = despesa("Conta de luz", "240.00", duda, nathan, caio, duda, bia);
+        pizza = despesa("Pizza", "90.00", nathan, nathan, caio, bia);
     }
 
     @Test
-    void resumoDaLarissaTemSoOQueEnvolveAElaECompensaOsDoisSentidos() {
-        MeuResumoResponse resumo = painelService.meuResumo(casaId, larissa.id());
+    void resumoDaCaioTemSoOQueEnvolveAElaECompensaOsDoisSentidos() {
+        MeuResumoResponse resumo = painelService.meuResumo(casaId, caio.id());
 
-        // deve 50 (mercado) + 30 (pizza) a Nathan e 60 (luz) a Matheus
+        // deve 50 (mercado) + 30 (pizza) a Nathan e 60 (luz) a Duda
         assertThat(resumo.deve()).isEqualByComparingTo("140.00");
         assertThat(resumo.aReceber()).isEqualByComparingTo("0");
         assertThat(resumo.acertos())
                 .extracting(a -> a.pessoa().nome())
-                .containsExactlyInAnyOrder("Nathan", "Matheus");
+                .containsExactlyInAnyOrder("Nathan", "Duda");
         assertThat(resumo.acertos()).allMatch(a -> a.euDevo());
     }
 
     @Test
-    void resumoDoNathanCompensaADividaComOMatheus() {
+    void resumoDoNathanCompensaADividaComODuda() {
         MeuResumoResponse resumo = painelService.meuResumo(casaId, nathan.id());
 
-        // Camilly 50 + 30 e Larissa 50 + 30 a receber; com o Matheus: ele deve 50 e Nathan deve 60 -> Nathan paga 10
+        // Bia 50 + 30 e Caio 50 + 30 a receber; com o Duda: ele deve 50 e Nathan deve 60 -> Nathan paga 10
         assertThat(resumo.aReceber()).isEqualByComparingTo("160.00");
         assertThat(resumo.deve()).isEqualByComparingTo("10.00");
     }
@@ -77,29 +77,29 @@ class PrivacidadeDaVisaoTest {
 
         assertThat(dividas.meDevem()).hasSize(5);
         assertThat(dividas.euDevo()).hasSize(1);
-        assertThat(dividas.euDevo().get(0).pessoa().nome()).isEqualTo("Matheus");
+        assertThat(dividas.euDevo().get(0).pessoa().nome()).isEqualTo("Duda");
     }
 
     @Test
     void quemNaoParticipouDaPizzaNaoVeAPizza() {
-        assertThat(descricoes(despesaService.listar(casaId, null, matheus.id())))
+        assertThat(descricoes(despesaService.listar(casaId, null, duda.id())))
                 .doesNotContain("Pizza")
                 .contains("Mercado", "Conta de luz");
 
-        assertThat(painelService.minhasDividas(casaId, matheus.id()).euDevo())
+        assertThat(painelService.minhasDividas(casaId, duda.id()).euDevo())
                 .extracting(d -> d.descricao())
                 .doesNotContain("Pizza");
 
-        assertThatThrownBy(() -> despesaService.buscar(casaId, pizza.id(), matheus.id()))
+        assertThatThrownBy(() -> despesaService.buscar(casaId, pizza.id(), duda.id()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
     }
 
     @Test
     void devedorSoVeAPropriaParteDaDespesa() {
-        DespesaResponse vistaPelaLarissa = despesaService.buscar(casaId, mercado.id(), larissa.id());
+        DespesaResponse vistaPelaCaio = despesaService.buscar(casaId, mercado.id(), caio.id());
 
-        assertThat(vistaPelaLarissa.divisoes()).hasSize(1);
-        assertThat(vistaPelaLarissa.divisoes().get(0).devedor().nome()).isEqualTo("Larissa");
+        assertThat(vistaPelaCaio.divisoes()).hasSize(1);
+        assertThat(vistaPelaCaio.divisoes().get(0).devedor().nome()).isEqualTo("Caio");
 
         // quem pagou vê todas as partes
         assertThat(despesaService.buscar(casaId, mercado.id(), nathan.id()).divisoes()).hasSize(4);
@@ -107,23 +107,23 @@ class PrivacidadeDaVisaoTest {
 
     @Test
     void soQuemPagouCobraEConfirmaORecebimento() {
-        Long divisaoDaLarissa = divisaoDe(mercado, larissa).id();
+        Long divisaoDaCaio = divisaoDe(mercado, caio).id();
 
-        assertThatThrownBy(() -> despesaService.cobrar(divisaoDaLarissa, null, larissa.id()))
+        assertThatThrownBy(() -> despesaService.cobrar(divisaoDaCaio, null, caio.id()))
                 .isInstanceOf(AcessoNegadoException.class);
-        assertThatThrownBy(() -> despesaService.registrarPagamento(divisaoDaLarissa, larissa.id()))
+        assertThatThrownBy(() -> despesaService.registrarPagamento(divisaoDaCaio, caio.id()))
                 .isInstanceOf(AcessoNegadoException.class);
 
         // quem não tem relação com a dívida nem sabe que ela existe
-        assertThatThrownBy(() -> despesaService.cobrar(divisaoDaLarissa, null, camilly.id()))
+        assertThatThrownBy(() -> despesaService.cobrar(divisaoDaCaio, null, bia.id()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
 
-        assertThat(despesaService.registrarPagamento(divisaoDaLarissa, nathan.id()).status().name()).isEqualTo("PAGA");
+        assertThat(despesaService.registrarPagamento(divisaoDaCaio, nathan.id()).status().name()).isEqualTo("PAGA");
     }
 
     @Test
     void soQuemPagouExcluiADespesa() {
-        assertThatThrownBy(() -> despesaService.excluir(casaId, mercado.id(), larissa.id()))
+        assertThatThrownBy(() -> despesaService.excluir(casaId, mercado.id(), caio.id()))
                 .isInstanceOf(AcessoNegadoException.class);
     }
 

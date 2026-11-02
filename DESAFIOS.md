@@ -3,7 +3,7 @@
 Cada item é uma melhoria que mostra um conhecimento diferente. Faça no seu ritmo, de preferência uma por branch, com commit e teste. Pode me pedir dicas ou revisão de cada uma.
 
 ## Nível 1: regras de negócio
-1. **Divisão com valores personalizados.** Hoje a divisão é sempre igual. Permita informar quanto cada participante paga (ex.: "Larissa paga 40%"). Dica: o `DespesaRequest` pode receber uma lista de `{moradorId, valor}` opcional, e o service valida que a soma fecha o total.
+1. **Divisão com valores personalizados.** Hoje a divisão é sempre igual. Permita informar quanto cada participante paga (ex.: "Caio paga 40%"). Dica: o `DespesaRequest` pode receber uma lista de `{moradorId, valor}` opcional, e o service valida que a soma fecha o total.
 2. **Desfazer pagamento.** Um endpoint para voltar uma divisão de `PAGA` para `COBRADA` caso o recebimento tenha sido marcado por engano.
 3. **Despesas recorrentes.** Aluguel e internet se repetem todo mês. Crie um modelo de despesa recorrente e gere as despesas do mês. Estudo: `@Scheduled`.
 

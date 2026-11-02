@@ -35,18 +35,18 @@ class ExclusaoDeCasaTest {
     @Autowired DespesaRepository despesas;
 
     Long casaId;
-    MoradorResponse nathan, larissa, camilly;
+    MoradorResponse nathan, caio, bia;
     DespesaResponse despesa;
 
     @BeforeEach
     void cenario() {
         casaId = casaService.criar(new CasaRequest("Casa da Vila")).id();
         nathan = casaService.adicionarMorador(casaId, new MoradorRequest("Nathan"));
-        larissa = casaService.adicionarMorador(casaId, new MoradorRequest("Larissa"));
-        camilly = casaService.adicionarMorador(casaId, new MoradorRequest("Camilly"));
-        casaService.definirResponsavel(casaId, camilly.id(), larissa.id());
+        caio = casaService.adicionarMorador(casaId, new MoradorRequest("Caio"));
+        bia = casaService.adicionarMorador(casaId, new MoradorRequest("Bia"));
+        casaService.definirResponsavel(casaId, bia.id(), caio.id());
         despesa = despesaService.registrar(casaId, new DespesaRequest("Mercado", new BigDecimal("90.00"),
-                LocalDate.of(2026, 10, 10), List.of(nathan.id(), larissa.id(), camilly.id())), nathan.id());
+                LocalDate.of(2026, 10, 10), List.of(nathan.id(), caio.id(), bia.id())), nathan.id());
     }
 
     @Test

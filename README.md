@@ -48,7 +48,7 @@
 
 - **Dividir uma despesa.** O Nathan paga R$ 200 no mercado e marca os 4 moradores: cada um deve R$ 50 a ele. Se a pizza (R$ 90) é só para 3 pessoas, só essas 3 entram na conta.
 - **Cobrar e confirmar.** Quem pagou cobra com prazo opcional, copia uma mensagem pronta para mandar no WhatsApp e marca como recebido quando o dinheiro chega.
-- **Acertar as contas.** A tela inicial mostra "quem deve quanto a quem", **compensando dívidas nos dois sentidos**. Se Nathan deve R$ 60 ao Matheus e o Matheus deve R$ 50 ao Nathan, o acerto é o Nathan pagar apenas R$ 10.
+- **Acertar as contas.** A tela inicial mostra "quem deve quanto a quem", **compensando dívidas nos dois sentidos**. Se Nathan deve R$ 60 ao Duda e o Duda deve R$ 50 ao Nathan, o acerto é o Nathan pagar apenas R$ 10.
 - **Contas fixas.** Aluguel, internet e luz se repetem todo mês: cadastre uma vez e a despesa é criada sozinha no vencimento. Pode editar o valor a qualquer momento (a conta de luz muda todo mês) e o app mostra as "próximas contas" com antecedência.
 - **Quem paga junto.** Duas irmãs que dividem a parte? A conta continua dividida por pessoa, mas a cobrança é uma só, no nome de uma delas.
 - **Histórico por mês.** Na aba Despesas, o modo "Histórico" agrupa tudo por mês, com o total de cada um. Cada dívida mostra quando foi criada e quando vence.

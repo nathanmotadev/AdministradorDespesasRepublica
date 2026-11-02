@@ -32,32 +32,32 @@ class AgrupamentoDeMoradoresTest {
     @Autowired PainelService painelService;
 
     Long casaId;
-    MoradorResponse nathan, larissa, camilly, matheus;
+    MoradorResponse nathan, caio, bia, duda;
 
     @BeforeEach
     void cenario() {
         casaId = casaService.criar(new CasaRequest("Casa da Vila")).id();
         nathan = casaService.adicionarMorador(casaId, new MoradorRequest("Nathan"));
-        larissa = casaService.adicionarMorador(casaId, new MoradorRequest("Larissa"));
-        camilly = casaService.adicionarMorador(casaId, new MoradorRequest("Camilly"));
-        matheus = casaService.adicionarMorador(casaId, new MoradorRequest("Matheus"));
-        casaService.definirResponsavel(casaId, camilly.id(), larissa.id());
+        caio = casaService.adicionarMorador(casaId, new MoradorRequest("Caio"));
+        bia = casaService.adicionarMorador(casaId, new MoradorRequest("Bia"));
+        duda = casaService.adicionarMorador(casaId, new MoradorRequest("Duda"));
+        casaService.definirResponsavel(casaId, bia.id(), caio.id());
     }
 
     DespesaResponse despesa(MoradorResponse pagador, String valor, boolean separar) {
         return despesaService.registrar(casaId, new DespesaRequest("Mercado", new BigDecimal(valor),
                 LocalDate.of(2026, 10, 10),
-                List.of(nathan.id(), larissa.id(), camilly.id(), matheus.id()), separar), pagador.id());
+                List.of(nathan.id(), caio.id(), bia.id(), duda.id()), separar), pagador.id());
     }
 
     @Test
     void divideEntreQuatroMasAsIrmasViramUmaCobrancaDeMetade() {
         DespesaResponse d = despesa(nathan, "100.00", false);
 
-        assertThat(d.divisoes()).hasSize(3); // Nathan (quitada), Larissa+Camilly, Matheus
-        assertThat(d.divisoes()).filteredOn(v -> v.devedor().id().equals(larissa.id()))
+        assertThat(d.divisoes()).hasSize(3); // Nathan (quitada), Caio+Bia, Duda
+        assertThat(d.divisoes()).filteredOn(v -> v.devedor().id().equals(caio.id()))
                 .singleElement().satisfies(v -> assertThat(v.valor()).isEqualByComparingTo("50.00"));
-        assertThat(d.divisoes()).filteredOn(v -> v.devedor().id().equals(matheus.id()))
+        assertThat(d.divisoes()).filteredOn(v -> v.devedor().id().equals(duda.id()))
                 .singleElement().satisfies(v -> assertThat(v.valor()).isEqualByComparingTo("25.00"));
     }
 
@@ -65,7 +65,7 @@ class AgrupamentoDeMoradoresTest {
     void asDuasIrmasVeemADividaDoGrupo() {
         despesa(nathan, "100.00", false);
 
-        for (MoradorResponse irma : List.of(larissa, camilly)) {
+        for (MoradorResponse irma : List.of(caio, bia)) {
             MeuResumoResponse resumo = painelService.meuResumo(casaId, irma.id());
             assertThat(resumo.deve()).isEqualByComparingTo("50.00");
             MinhasDividasResponse dividas = painelService.minhasDividas(casaId, irma.id());
@@ -84,37 +84,37 @@ class AgrupamentoDeMoradoresTest {
 
     @Test
     void quandoAIrmaPagaASuaParteEDaIrmaNaoViraDivida() {
-        DespesaResponse d = despesa(camilly, "100.00", false);
+        DespesaResponse d = despesa(bia, "100.00", false);
 
-        // Larissa é do mesmo grupo de quem pagou: só Nathan e Matheus devem
+        // Caio é do mesmo grupo de quem pagou: só Nathan e Duda devem
         assertThat(d.divisoes()).filteredOn(v -> !v.parteDoPagador()).hasSize(2);
-        assertThat(painelService.meuResumo(casaId, larissa.id()).aReceber()).isEqualByComparingTo("50.00");
-        assertThat(painelService.meuResumo(casaId, larissa.id()).deve()).isEqualByComparingTo("0");
+        assertThat(painelService.meuResumo(casaId, caio.id()).aReceber()).isEqualByComparingTo("50.00");
+        assertThat(painelService.meuResumo(casaId, caio.id()).deve()).isEqualByComparingTo("0");
     }
 
     @Test
     void naoEnxergaQuemNaoEDoGrupoNemParticipa() {
         despesaService.registrar(casaId, new DespesaRequest("Pizza", new BigDecimal("60.00"),
-                LocalDate.of(2026, 10, 10), List.of(nathan.id(), larissa.id())), nathan.id());
+                LocalDate.of(2026, 10, 10), List.of(nathan.id(), caio.id())), nathan.id());
 
-        assertThat(despesaService.listar(casaId, null, camilly.id())).hasSize(1); // irmã da Larissa vê
-        assertThat(despesaService.listar(casaId, null, matheus.id())).isEmpty();
+        assertThat(despesaService.listar(casaId, null, bia.id())).hasSize(1); // irmã da Caio vê
+        assertThat(despesaService.listar(casaId, null, duda.id())).isEmpty();
     }
 
     @Test
     void regrasDoAgrupamento() {
-        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, larissa.id(), nathan.id()))
-                .isInstanceOf(RegraDeNegocioException.class); // Larissa já é responsável por Camilly
-        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, nathan.id(), camilly.id()))
-                .isInstanceOf(RegraDeNegocioException.class); // Camilly já paga junto com Larissa
+        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, caio.id(), nathan.id()))
+                .isInstanceOf(RegraDeNegocioException.class); // Caio já é responsável por Bia
+        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, nathan.id(), bia.id()))
+                .isInstanceOf(RegraDeNegocioException.class); // Bia já paga junto com Caio
         assertThatThrownBy(() -> casaService.definirResponsavel(casaId, nathan.id(), nathan.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
-        assertThatThrownBy(() -> casaService.desativarMorador(casaId, larissa.id()))
+        assertThatThrownBy(() -> casaService.desativarMorador(casaId, caio.id()))
                 .isInstanceOf(RegraDeNegocioException.class);
-        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, 99999L, larissa.id()))
+        assertThatThrownBy(() -> casaService.definirResponsavel(casaId, 99999L, caio.id()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
 
-        casaService.definirResponsavel(casaId, camilly.id(), null);
+        casaService.definirResponsavel(casaId, bia.id(), null);
         assertThat(despesa(nathan, "100.00", false).divisoes()).hasSize(4);
     }
 }

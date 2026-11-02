@@ -39,14 +39,14 @@ class ContaFixaServiceTest {
     @Autowired MoradorRepository moradores;
 
     Long casaId;
-    MoradorResponse nathan, larissa, matheus;
+    MoradorResponse nathan, caio, duda;
 
     @BeforeEach
     void cenario() {
         casaId = casaService.criar(new CasaRequest("Casa da Vila")).id();
         nathan = casaService.adicionarMorador(casaId, new MoradorRequest("Nathan"));
-        larissa = casaService.adicionarMorador(casaId, new MoradorRequest("Larissa"));
-        matheus = casaService.adicionarMorador(casaId, new MoradorRequest("Matheus"));
+        caio = casaService.adicionarMorador(casaId, new MoradorRequest("Caio"));
+        duda = casaService.adicionarMorador(casaId, new MoradorRequest("Duda"));
     }
 
     ContaFixaService em(String data) {
@@ -66,7 +66,7 @@ class ContaFixaServiceTest {
     @Test
     void naoGeraAntesDoVencimentoEGeraNoDia() {
         ContaFixaService servico = em("2026-10-03");
-        ContaFixaResponse conta = servico.criar(casaId, aluguel("900.00", 5, nathan, larissa, matheus), nathan.id());
+        ContaFixaResponse conta = servico.criar(casaId, aluguel("900.00", 5, nathan, caio, duda), nathan.id());
         assertThat(conta.proximoVencimento()).isEqualTo(LocalDate.of(2026, 10, 5));
 
         servico.gerarPendentes(casaId);
@@ -81,7 +81,7 @@ class ContaFixaServiceTest {
 
     @Test
     void naoGeraDuasVezesNoMesmoVencimento() {
-        em("2026-10-03").criar(casaId, aluguel("900.00", 5, nathan, larissa), nathan.id());
+        em("2026-10-03").criar(casaId, aluguel("900.00", 5, nathan, caio), nathan.id());
 
         em("2026-10-06").gerarPendentes(casaId);
         em("2026-10-07").gerarPendentes(casaId);
@@ -91,7 +91,7 @@ class ContaFixaServiceTest {
 
     @Test
     void mesesSemAbrirOAppGeramUmaDespesaPorMes() {
-        em("2026-07-01").criar(casaId, aluguel("900.00", 10, nathan, larissa), nathan.id());
+        em("2026-07-01").criar(casaId, aluguel("900.00", 10, nathan, caio), nathan.id());
 
         em("2026-10-15").gerarPendentes(casaId);
 
@@ -103,10 +103,10 @@ class ContaFixaServiceTest {
     @Test
     void valorEditadoEntreOsMesesVaiSoParaAsProximasDespesas() {
         ContaFixaService setembro = em("2026-09-01");
-        ContaFixaResponse conta = setembro.criar(casaId, aluguel("100.00", 5, nathan, larissa), nathan.id());
+        ContaFixaResponse conta = setembro.criar(casaId, aluguel("100.00", 5, nathan, caio), nathan.id());
         em("2026-09-06").gerarPendentes(casaId);
 
-        em("2026-09-20").editar(casaId, conta.id(), aluguel("130.00", 5, nathan, larissa), nathan.id());
+        em("2026-09-20").editar(casaId, conta.id(), aluguel("130.00", 5, nathan, caio), nathan.id());
         em("2026-10-06").gerarPendentes(casaId);
 
         assertThat(despesasDe(nathan)).extracting(DespesaResponse::valorTotal)
@@ -116,7 +116,7 @@ class ContaFixaServiceTest {
 
     @Test
     void contaPausadaNaoGeraEAoRetomarNaoCobraOsMesesParados() {
-        ContaFixaResponse conta = em("2026-07-01").criar(casaId, aluguel("100.00", 5, nathan, larissa), nathan.id());
+        ContaFixaResponse conta = em("2026-07-01").criar(casaId, aluguel("100.00", 5, nathan, caio), nathan.id());
         em("2026-07-02").pausar(casaId, conta.id(), nathan.id());
 
         em("2026-10-01").gerarPendentes(casaId);
@@ -130,13 +130,13 @@ class ContaFixaServiceTest {
 
     @Test
     void moradorInativoSaiDaDivisaoEContaSemNinguemParaCobrarFicaPausada() {
-        em("2026-10-01").criar(casaId, aluguel("90.00", 5, nathan, larissa, matheus), nathan.id());
-        moradores.findById(matheus.id()).orElseThrow().setAtivo(false);
+        em("2026-10-01").criar(casaId, aluguel("90.00", 5, nathan, caio, duda), nathan.id());
+        moradores.findById(duda.id()).orElseThrow().setAtivo(false);
 
         em("2026-10-06").gerarPendentes(casaId);
         assertThat(despesasDe(nathan).get(0).divisoes()).hasSize(2);
 
-        moradores.findById(larissa.id()).orElseThrow().setAtivo(false);
+        moradores.findById(caio.id()).orElseThrow().setAtivo(false);
         em("2026-11-06").gerarPendentes(casaId);
 
         assertThat(despesasDe(nathan)).hasSize(1);
@@ -145,20 +145,20 @@ class ContaFixaServiceTest {
 
     @Test
     void soQuemCadastrouAlteraEQuemNaoParticipaNemEnxerga() {
-        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, larissa), nathan.id());
+        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, caio), nathan.id());
         ContaFixaService servico = em("2026-10-01");
 
-        assertThatThrownBy(() -> servico.pausar(casaId, conta.id(), larissa.id()))
+        assertThatThrownBy(() -> servico.pausar(casaId, conta.id(), caio.id()))
                 .isInstanceOf(AcessoNegadoException.class);
-        assertThatThrownBy(() -> servico.excluir(casaId, conta.id(), matheus.id()))
+        assertThatThrownBy(() -> servico.excluir(casaId, conta.id(), duda.id()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
-        assertThat(servico.listar(casaId, larissa.id())).hasSize(1);
-        assertThat(servico.listar(casaId, matheus.id())).isEmpty();
+        assertThat(servico.listar(casaId, caio.id())).hasSize(1);
+        assertThat(servico.listar(casaId, duda.id())).isEmpty();
     }
 
     @Test
     void excluirContaMantemAsDespesasJaGeradas() {
-        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, larissa), nathan.id());
+        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, caio), nathan.id());
         em("2026-10-06").gerarPendentes(casaId);
 
         em("2026-10-07").excluir(casaId, conta.id(), nathan.id());
@@ -169,10 +169,10 @@ class ContaFixaServiceTest {
 
     @Test
     void diaDoMesAlteradoMudaOProximoVencimento() {
-        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, larissa), nathan.id());
+        ContaFixaResponse conta = em("2026-10-01").criar(casaId, aluguel("100.00", 5, nathan, caio), nathan.id());
 
         ContaFixaResponse editada = em("2026-10-01")
-                .editar(casaId, conta.id(), aluguel("100.00", 20, nathan, larissa), nathan.id());
+                .editar(casaId, conta.id(), aluguel("100.00", 20, nathan, caio), nathan.id());
 
         assertThat(editada.proximoVencimento()).isEqualTo(LocalDate.of(2026, 10, 20));
     }
