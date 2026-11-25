@@ -54,6 +54,9 @@ public class Despesa {
     /** Nulo em despesas antigas (equivale a falso). */
     private Boolean cobrarSeparado;
 
+    /** Conta fixa que gerou esta despesa (sem chave estrangeira: excluir a conta não apaga o histórico). */
+    private Long contaFixaId;
+
     protected Despesa() {
     }
 
@@ -84,6 +87,14 @@ public class Despesa {
         this.participantes.clear();
         this.participantes.addAll(participantes);
         this.cobrarSeparado = cobrarSeparado;
+    }
+
+    public void vincularContaFixa(Long contaFixaId) {
+        this.contaFixaId = contaFixaId;
+    }
+
+    public Long getContaFixaId() {
+        return contaFixaId;
     }
 
     /** Verdadeiro se ainda existe alguém devendo nesta despesa. */

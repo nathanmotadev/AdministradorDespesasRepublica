@@ -71,7 +71,21 @@ public final class Dtos {
             @NotNull(message = "O dia do mês é obrigatório")
             @Min(value = 1, message = "O dia deve estar entre 1 e 28")
             @Max(value = 28, message = "O dia deve estar entre 1 e 28") Integer diaDoMes,
-            @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds) {
+            @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds,
+            @Schema(description = "Luz, gás e afins: o valor muda todo mês e é informado a cada vencimento")
+            Boolean valorVariavel) {
+        public ContaFixaRequest(String descricao, BigDecimal valor, Integer diaDoMes, List<Long> participantesIds) {
+            this(descricao, valor, diaDoMes, participantesIds, false);
+        }
+
+        public boolean variavel() {
+            return Boolean.TRUE.equals(valorVariavel);
+        }
+    }
+
+    public record ValorDaContaRequest(
+            @NotNull(message = "O valor é obrigatório")
+            @DecimalMin(value = "0.01", message = "O valor deve ser maior que zero") BigDecimal valor) {
     }
 
     public record ResponsavelRequest(
@@ -122,11 +136,13 @@ public final class Dtos {
 
     public record ContaFixaResponse(Long id, String descricao, BigDecimal valor, int diaDoMes, boolean ativa,
                                     LocalDate proximoVencimento, MoradorResponse pagador,
-                                    List<MoradorResponse> participantes) {
-        public static ContaFixaResponse de(ContaFixa c) {
+                                    List<MoradorResponse> participantes, boolean valorVariavel,
+                                    boolean aguardandoValor) {
+        public static ContaFixaResponse de(ContaFixa c, LocalDate hoje) {
             return new ContaFixaResponse(c.getId(), c.getDescricao(), c.getValor(), c.getDiaDoMes(), c.isAtiva(),
                     c.getProximoVencimento(), MoradorResponse.de(c.getPagador()),
-                    c.getParticipantes().stream().map(MoradorResponse::de).toList());
+                    c.getParticipantes().stream().map(MoradorResponse::de).toList(),
+                    c.isValorVariavel(), c.aguardandoValor(hoje));
         }
     }
 
@@ -199,6 +215,21 @@ public final class Dtos {
     }
 
     public record ResumoResponse(List<SaldoMoradorResponse> saldos, List<AcertoResponse> acertos) {
+    }
+
+    // ---------- saída: resumo do mês ----------
+
+    @Schema(description = "Uma conta fixa no mês do morador logado: quanto é a parte dele e em que pé está")
+    public record ItemContaFixaResponse(
+            String rotulo,
+            BigDecimal valor,
+            @Schema(description = "QUITADA: tudo pago; EM_ABERTO: já lançada, falta pagar; "
+                    + "A_VENCER: ainda não venceu neste mês (valor estimado)") String situacao) {
+    }
+
+    @Schema(description = "Quanto o morador logado paga por mês nas contas fixas ativas em que participa "
+            + "(a parte dele e de quem paga junto), conta a conta")
+    public record MinhasContasFixasResponse(BigDecimal total, List<ItemContaFixaResponse> itens, boolean temEstimado) {
     }
 
     // ---------- saída: "Minha visão" ----------

@@ -54,6 +54,12 @@ public class DespesaService {
      */
     @Transactional
     public DespesaResponse registrar(Long casaId, DespesaRequest request, Long solicitanteId) {
+        return registrar(casaId, request, solicitanteId, null);
+    }
+
+    /** Com {@code contaFixaId}, marca a despesa como gerada por aquela conta fixa (para o histórico por mês). */
+    @Transactional
+    public DespesaResponse registrar(Long casaId, DespesaRequest request, Long solicitanteId, Long contaFixaId) {
         Casa casa = casaService.buscarEntidade(casaId);
         Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
@@ -62,6 +68,7 @@ public class DespesaService {
         BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
         Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
         despesa.definirParticipantes(participantes, request.separar());
+        despesa.vincularContaFixa(contaFixaId);
 
         Map<Morador, BigDecimal> partes = calcularPartes(pagador, participantes, total, request.separar());
         partes.forEach((devedor, valor) -> {
@@ -72,6 +79,12 @@ public class DespesaService {
             despesa.adicionarDivisao(divisao);
         });
         return DespesaResponse.de(despesas.save(despesa), pagador.idDoGrupo());
+    }
+
+    /** Despesas da casa com data dentro do mês (entidades, para uso dentro de outra transação de leitura). */
+    @Transactional(readOnly = true)
+    public List<Despesa> doMes(Long casaId, YearMonth mes) {
+        return despesas.findByCasaIdAndDataBetweenOrderByDataDescIdDesc(casaId, mes.atDay(1), mes.atEndOfMonth());
     }
 
     /**
