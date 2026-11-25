@@ -219,6 +219,25 @@ public final class Dtos {
 
     // ---------- saída: resumo do mês ----------
 
+    @Schema(description = "Um valor do resumo do mês: uma conta (Aluguel, Luz...) ou quem pagou")
+    public record ItemDoMesResponse(String rotulo, BigDecimal valor) {
+    }
+
+    @Schema(description = "O mês em números, só com as despesas em que o morador logado pagou ou tem parte "
+            + "(as demais não entram, para manter a privacidade entre moradores)")
+    public record ResumoMesResponse(
+            @Schema(description = "Mês no formato aaaa-mm", example = "2026-10") String mes,
+            @Schema(description = "Quantas despesas entram no resumo") int quantidade,
+            @Schema(description = "Soma do valor total dessas despesas") BigDecimal total,
+            @Schema(description = "O mesmo total no mês anterior, para comparar") BigDecimal totalMesAnterior,
+            @Schema(description = "Quanto coube a mim (e a quem paga junto comigo) nessas despesas") BigDecimal minhaParte,
+            @Schema(description = "Quanto eu (e quem paga junto comigo) paguei") BigDecimal euPaguei,
+            @Schema(description = "Total por conta, da maior para a menor; as menores vêm juntas em 'Outras'")
+            List<ItemDoMesResponse> porConta,
+            @Schema(description = "Quanto cada pessoa pagou nessas despesas, do maior para o menor")
+            List<ItemDoMesResponse> porPagador) {
+    }
+
     @Schema(description = "Uma conta fixa no mês do morador logado: quanto é a parte dele e em que pé está")
     public record ItemContaFixaResponse(
             String rotulo,
