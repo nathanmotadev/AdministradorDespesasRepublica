@@ -104,6 +104,10 @@ public class DespesaService {
             if (continua) {
                 atuais.put(divisao.getDevedor().getId(), divisao);
             } else {
+                if (divisao.getStatus() == StatusDivisao.PAGA && !divisao.isParteDoPagador()) {
+                    throw new RegraDeNegocioException(divisao.getDevedor().getNome()
+                            + " já pagou a parte dele. Não dá para tirá-lo da despesa sem perder esse pagamento.");
+                }
                 despesa.removerDivisao(divisao);
             }
         }

@@ -199,4 +199,16 @@ class CenariosDaRepublicaTest {
                 .filter(d -> d.devedor().id().equals(morador.id()))
                 .findFirst().orElseThrow();
     }
+
+    @Test
+    void naoDeixaTirarDaDespesaQuemJaPagou() {
+        DespesaResponse mercado = despesa("Mercado", "200.00", nathan, nathan, caio, duda);
+        despesaService.registrarPagamento(divisaoDe(mercado, caio).id(), nathan.id());
+
+        assertThatThrownBy(() -> despesaService.editar(casaId, mercado.id(),
+                new DespesaRequest("Mercado", new BigDecimal("200.00"), null, List.of(nathan.id(), duda.id())),
+                nathan.id()))
+                .isInstanceOf(RegraDeNegocioException.class)
+                .hasMessageContaining("já pagou");
+    }
 }
