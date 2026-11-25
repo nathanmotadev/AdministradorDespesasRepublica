@@ -1,5 +1,6 @@
 package br.com.republica.dto;
 
+import br.com.republica.config.Hoje;
 import br.com.republica.model.Casa;
 import br.com.republica.model.ContaFixa;
 import br.com.republica.model.Despesa;
@@ -143,7 +144,7 @@ public final class Dtos {
         public static DivisaoResponse de(Divisao d) {
             return new DivisaoResponse(d.getId(), MoradorResponse.de(d.getDevedor()), d.getValor(), d.getStatus(),
                     d.isParteDoPagador(), d.getCobradaEm(), d.getVencimento(), d.getPagaEm(),
-                    d.isAtrasada(LocalDate.now()));
+                    d.isAtrasada(Hoje.hoje()));
         }
     }
 

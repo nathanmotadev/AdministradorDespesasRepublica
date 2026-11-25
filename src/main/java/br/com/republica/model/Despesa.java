@@ -1,5 +1,6 @@
 package br.com.republica.model;
 
+import br.com.republica.config.Hoje;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -62,7 +63,7 @@ public class Despesa {
         this.data = data;
         this.casa = casa;
         this.pagador = pagador;
-        this.criadaEm = LocalDate.now();
+        this.criadaEm = Hoje.hoje();
     }
 
     public void adicionarDivisao(Divisao divisao) {

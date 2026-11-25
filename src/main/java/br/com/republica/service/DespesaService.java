@@ -1,5 +1,6 @@
 package br.com.republica.service;
 
+import br.com.republica.config.Hoje;
 import br.com.republica.dto.Dtos.DespesaRequest;
 import br.com.republica.dto.Dtos.DespesaResponse;
 import br.com.republica.dto.Dtos.DivisaoResponse;
@@ -57,7 +58,7 @@ public class DespesaService {
         Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
 
-        LocalDate data = request.data() != null ? request.data() : LocalDate.now();
+        LocalDate data = request.data() != null ? request.data() : Hoje.hoje();
         BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
         Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
         despesa.definirParticipantes(participantes, request.separar());
@@ -204,7 +205,7 @@ public class DespesaService {
         if (emAberto.isEmpty()) {
             throw new RegraDeNegocioException("Não há valores em aberto nesta despesa.");
         }
-        emAberto.forEach(d -> d.cobrar(LocalDate.now(), vencimento));
+        emAberto.forEach(d -> d.cobrar(Hoje.hoje(), vencimento));
         return DespesaResponse.de(despesa, grupos.idDoGrupo(solicitanteId));
     }
 
@@ -218,7 +219,7 @@ public class DespesaService {
         if (divisao.getStatus() == StatusDivisao.PAGA) {
             throw new RegraDeNegocioException("Esta parte já foi paga.");
         }
-        divisao.cobrar(LocalDate.now(), vencimento);
+        divisao.cobrar(Hoje.hoje(), vencimento);
         return DivisaoResponse.de(divisao);
     }
 
@@ -228,7 +229,7 @@ public class DespesaService {
         if (divisao.getStatus() == StatusDivisao.PAGA) {
             throw new RegraDeNegocioException("Esta parte já foi paga.");
         }
-        divisao.quitar(LocalDate.now());
+        divisao.quitar(Hoje.hoje());
         return DivisaoResponse.de(divisao);
     }
 
@@ -300,7 +301,7 @@ public class DespesaService {
     }
 
     private void validarVencimento(LocalDate vencimento) {
-        if (vencimento != null && vencimento.isBefore(LocalDate.now())) {
+        if (vencimento != null && vencimento.isBefore(Hoje.hoje())) {
             throw new RegraDeNegocioException("O vencimento não pode ser no passado.");
         }
     }
