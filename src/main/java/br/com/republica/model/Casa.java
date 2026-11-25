@@ -19,6 +19,11 @@ public class Casa {
     @Column(unique = true, length = 20)
     private String codigoConvite;
 
+    /** Casa ou apartamento. Casas criadas antes deste campo ficam nulas no banco e contam como CASA. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 12)
+    private TipoMoradia tipo;
+
     @OneToMany(mappedBy = "casa")
     @OrderBy("nome")
     private List<Morador> moradores = new ArrayList<>();
@@ -27,8 +32,13 @@ public class Casa {
     }
 
     public Casa(String nome, String codigoConvite) {
+        this(nome, codigoConvite, TipoMoradia.CASA);
+    }
+
+    public Casa(String nome, String codigoConvite, TipoMoradia tipo) {
         this.nome = nome;
         this.codigoConvite = codigoConvite;
+        setTipo(tipo);
     }
 
     public Long getId() {
@@ -49,6 +59,14 @@ public class Casa {
 
     public void setCodigoConvite(String codigoConvite) {
         this.codigoConvite = codigoConvite;
+    }
+
+    public TipoMoradia getTipo() {
+        return tipo != null ? tipo : TipoMoradia.CASA;
+    }
+
+    public void setTipo(TipoMoradia tipo) {
+        this.tipo = tipo != null ? tipo : TipoMoradia.CASA;
     }
 
     public List<Morador> getMoradores() {

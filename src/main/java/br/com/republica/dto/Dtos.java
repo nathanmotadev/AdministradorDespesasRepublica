@@ -7,6 +7,7 @@ import br.com.republica.model.Despesa;
 import br.com.republica.model.Divisao;
 import br.com.republica.model.Morador;
 import br.com.republica.model.StatusDivisao;
+import br.com.republica.model.TipoMoradia;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
@@ -30,7 +31,13 @@ public final class Dtos {
     // ---------- entrada: casas, moradores e despesas ----------
 
     public record CasaRequest(
-            @NotBlank(message = "O nome da casa é obrigatório") @Size(max = 80) String nome) {
+            @NotBlank(message = "O nome da casa é obrigatório") @Size(max = 80) String nome,
+            @Schema(description = "CASA ou APARTAMENTO; se omitido, não muda (ou vira CASA ao criar)")
+            TipoMoradia tipo) {
+
+        public CasaRequest(String nome) {
+            this(nome, null);
+        }
     }
 
     public record MoradorRequest(
@@ -83,7 +90,12 @@ public final class Dtos {
             @NotBlank(message = "Seu nome é obrigatório") @Size(max = 80) String nome,
             @NotBlank(message = "O e-mail é obrigatório") @Email(message = "E-mail inválido") @Size(max = 160) String email,
             @NotBlank(message = "A senha é obrigatória")
-            @Size(min = 8, max = 72, message = "A senha deve ter de 8 a 72 caracteres") String senha) {
+            @Size(min = 8, max = 72, message = "A senha deve ter de 8 a 72 caracteres") String senha,
+            @Schema(description = "CASA ou APARTAMENTO; se omitido, CASA") TipoMoradia tipo) {
+
+        public CadastroComCasaRequest(String nomeCasa, String nome, String email, String senha) {
+            this(nomeCasa, nome, email, senha, null);
+        }
     }
 
     public record CadastroComConviteRequest(
@@ -118,13 +130,14 @@ public final class Dtos {
         }
     }
 
-    public record CasaResponse(Long id, String nome, List<MoradorResponse> moradores) {
+    public record CasaResponse(Long id, String nome, TipoMoradia tipo, List<MoradorResponse> moradores) {
         public static CasaResponse de(Casa c) {
             return de(c, c.getMoradores());
         }
 
         public static CasaResponse de(Casa c, List<Morador> moradores) {
-            return new CasaResponse(c.getId(), c.getNome(), moradores.stream().map(MoradorResponse::de).toList());
+            return new CasaResponse(c.getId(), c.getNome(), c.getTipo(),
+                    moradores.stream().map(MoradorResponse::de).toList());
         }
     }
 

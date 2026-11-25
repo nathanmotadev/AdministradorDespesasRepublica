@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,6 +76,33 @@ class ApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andExpect(jsonPath("$.morador.admin").value(true));
+    }
+
+    // ---------- casa ou apartamento ----------
+
+    @Test
+    void casaNovaSemTipoContaComoCasa() throws Exception {
+        Sessao ana = cadastrarCasa("Casa A", "Ana", "ana@email.com");
+        consultar(ana, "/api/eu").andExpect(status().isOk())
+                .andExpect(jsonPath("$.casa.tipo").value("CASA"));
+    }
+
+    @Test
+    void cadastroPodeEscolherApartamentoEOAdministradorPodeTrocar() throws Exception {
+        String corpo = "{\"nomeCasa\":\"Ap 42\",\"nome\":\"Ana\",\"email\":\"ana@email.com\","
+                + "\"senha\":\"senha1234\",\"tipo\":\"APARTAMENTO\"}";
+        Sessao ana = lerSessao(enviar("/api/auth/cadastro/casa", null, corpo).andExpect(status().isCreated()));
+        consultar(ana, "/api/eu").andExpect(jsonPath("$.casa.tipo").value("APARTAMENTO"));
+
+        mvc.perform(put("/api/casas/" + ana.casaId()).header("Authorization", "Bearer " + ana.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Ap 42\",\"tipo\":\"CASA\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("CASA"));
+
+        // renomear sem mandar o tipo mantém o que já estava
+        mvc.perform(put("/api/casas/" + ana.casaId()).header("Authorization", "Bearer " + ana.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Casa 42\"}"))
+                .andExpect(jsonPath("$.tipo").value("CASA"));
     }
 
     // ---------- acesso ----------

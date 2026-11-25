@@ -45,7 +45,7 @@ public class CasaController {
     }
 
     @PutMapping("/{casaId}")
-    @Operation(summary = "Renomeia a casa (administrador)")
+    @Operation(summary = "Renomeia a casa e/ou troca entre casa e apartamento (administrador)")
     public CasaResponse renomear(@PathVariable Long casaId, @Valid @RequestBody CasaRequest request,
                                  @AuthenticationPrincipal Jwt jwt) {
         autorizacao.administradorDaCasa(jwt, casaId);
