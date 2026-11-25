@@ -69,12 +69,24 @@ export function abrirNovaDespesa({ state, recarregar }, despesa = null) {
     }
 
     // ---------- campos ----------
+    // avisa quando a descrição é a de uma conta fixa: ela já vira despesa sozinha todo mês
+    const avisoFixa = h('p', { class: 'dica aviso-fixa', hidden: true, role: 'status' });
+    function conferirContaFixa() {
+        const nome = form.descricao.trim().toLowerCase();
+        const conta = editando || !nome ? null
+            : (state.contasFixas ?? []).find((c) => c.ativa && c.descricao.trim().toLowerCase() === nome);
+        avisoFixa.hidden = !conta;
+        if (conta) {
+            avisoFixa.textContent = `Você já tem a conta fixa "${conta.descricao}", que vira despesa sozinha todo mês. `
+                + 'Lance aqui só se for um gasto à parte, para não contar duas vezes.';
+        }
+    }
     const campoDescricao = h('input', { type: 'text', maxlength: 120, placeholder: 'Ex.: Mercado da semana', value: form.descricao,
-        autocomplete: 'off', oninput: (e) => { form.descricao = e.target.value; calcular(); } });
+        autocomplete: 'off', oninput: (e) => { form.descricao = e.target.value; calcular(); conferirContaFixa(); } });
 
     const sugestoes = h('div', { class: 'chips' }, SUGESTOES.map((texto) =>
         h('button', { type: 'button', class: 'chip simple', onclick: () => {
-            form.descricao = texto; campoDescricao.value = texto; calcular();
+            form.descricao = texto; campoDescricao.value = texto; calcular(); conferirContaFixa();
         } }, texto)));
 
     const campoValor = h('input', { type: 'text', class: 'valor-input', inputmode: 'decimal', placeholder: '0,00',
@@ -128,7 +140,7 @@ export function abrirNovaDespesa({ state, recarregar }, despesa = null) {
 
     const corpo = h('form', { onsubmit: (e) => { e.preventDefault(); if (!botaoSalvar.disabled) salvar(); } },
         h('div', { class: 'field' }, h('label', {}, 'Valor total (R$)'), campoValor),
-        h('div', { class: 'field' }, h('label', {}, 'O que foi?'), campoDescricao, sugestoes),
+        h('div', { class: 'field' }, h('label', {}, 'O que foi?'), campoDescricao, sugestoes, avisoFixa),
         h('p', { class: 'dica', style: 'margin-bottom:.9rem' }, 'Você pagou esta despesa. Marque abaixo quem divide com você.'),
         h('div', { class: 'field' },
             h('div', { class: 'card-head', style: 'margin:0' },
@@ -139,7 +151,7 @@ export function abrirNovaDespesa({ state, recarregar }, despesa = null) {
             participantes),
         haAgrupados && h('label', { class: 'chip simple', style: 'margin-bottom:.9rem' },
             h('input', { type: 'checkbox', checked: form.separar, onchange: (e) => { form.separar = e.target.checked; } }),
-            'Cobrar cada um separado (ignorar quem paga junto)'),
+            'Cobrar quem paga junto separadamente'),
         h('div', { class: 'field' }, h('label', {}, 'Data'), campoData),
         algumPago && h('p', { class: 'dica', style: 'margin-bottom:.9rem' },
             'Quem já pagou continua quitado se o valor dele não mudar. Se mudar, a parte volta a ficar em aberto.'),

@@ -39,7 +39,8 @@ export function abrirCobranca({ casaId, despesa, divisoes, recarregar }) {
     async function confirmarCobranca() {
         try {
             if (unica) await api.cobrar(unica.id, vencimento);
-            else await api.cobrarTodos(casaId, despesa.id, vencimento);
+            else if (despesa.id) await api.cobrarTodos(casaId, despesa.id, vencimento);
+            else await Promise.all(divisoes.map((d) => api.cobrar(d.id, vencimento)));
             fechar();
             toast(unica ? `${unica.devedor.nome} foi cobrado(a)` : 'Cobranças registradas');
             await recarregar();

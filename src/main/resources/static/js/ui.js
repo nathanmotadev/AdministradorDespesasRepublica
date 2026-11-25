@@ -1,6 +1,8 @@
 // Pequenos utilitários de interface: criação de elementos, modais, confirmação e avisos.
 // Os textos sempre entram como nós de texto (nunca innerHTML), então não há risco de XSS.
 
+import { removerSuave } from './movimento.js';
+
 export function h(tag, props = {}, ...children) {
     const el = document.createElement(tag);
     for (const [chave, valor] of Object.entries(props ?? {})) {
@@ -20,7 +22,7 @@ export function h(tag, props = {}, ...children) {
 export function toast(mensagem, tipo = 'ok') {
     const aviso = h('div', { class: `toast ${tipo}` }, mensagem);
     document.getElementById('toasts').append(aviso);
-    setTimeout(() => aviso.remove(), 4200);
+    setTimeout(() => removerSuave(aviso), 4200);
 }
 
 export function abrirModal({ titulo, corpo, rodape }) {
@@ -28,9 +30,9 @@ export function abrirModal({ titulo, corpo, rodape }) {
     const focoAnterior = document.activeElement;
 
     const fechar = () => {
-        sobreposicao.remove();
+        removerSuave(sobreposicao);
         document.removeEventListener('keydown', aoTeclar);
-        focoAnterior?.focus?.();
+        focoAnterior?.focus?.({ preventScroll: true });
     };
     const aoTeclar = (evento) => {
         if (evento.key === 'Escape') fechar();
@@ -47,6 +49,10 @@ export function abrirModal({ titulo, corpo, rodape }) {
             h('div', { class: 'modal-body' }, corpo),
             rodape ? h('footer', { class: 'modal-foot' }, rodape) : null));
 
+    if (!raiz.querySelector('.overlay:not(.saindo)')) {
+        const raizPagina = document.documentElement;
+        raizPagina.style.setProperty('--barra', `${window.innerWidth - raizPagina.clientWidth}px`);
+    }
     document.addEventListener('keydown', aoTeclar);
     raiz.append(sobreposicao);
     sobreposicao.querySelector('input:not([type=checkbox]):not([type=radio]), select, textarea')?.focus();

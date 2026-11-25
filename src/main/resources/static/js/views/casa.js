@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { abrirModal, h, toast } from '../ui.js';
-import { avatar, executar, icone } from '../components.js';
+import { avatar, executar, icone, imagemMoradia } from '../components.js';
+import { definirTema, preferenciaTema } from '../tema.js';
 import { viewMoradores } from './moradores.js';
 import { cartaoContasFixas } from './contas-fixas.js';
 
@@ -11,25 +12,43 @@ export function viewCasa(ctx) {
         h('h1', {}, 'Casa'),
         cartaoCasa(ctx),
         state.eu.admin && cartaoConvite(ctx),
-        cartaoContasFixas(ctx),
+        h('div', { class: 'so-celular' }, cartaoContasFixas(ctx)),
         viewMoradores(ctx),
+        cartaoAparencia(),
         cartaoConta(ctx),
         state.eu.admin && cartaoExcluir(ctx));
 }
 
+const MORADIAS = [
+    { tipo: 'CASA', titulo: 'Casa', sub: 'sobrado, casa de vila' },
+    { tipo: 'APARTAMENTO', titulo: 'Apartamento', sub: 'prédio, condomínio' },
+];
+
 function cartaoCasa({ state, recarregar }) {
-    function abrirRenomear() {
-        const campo = h('input', { type: 'text', maxlength: 80, value: state.casa.nome, 'aria-label': 'Novo nome da casa' });
+    function abrirEdicao() {
+        let tipo = state.casa.tipo;
+        const campo = h('input', { type: 'text', maxlength: 80, value: state.casa.nome, id: 'campo-nome-casa' });
+        const opcoes = MORADIAS.map((m) => h('label', { class: 'opcao-moradia' },
+            h('input', { type: 'radio', name: 'tipo-casa', value: m.tipo, checked: m.tipo === tipo,
+                onchange: () => { tipo = m.tipo; } }),
+            imagemMoradia(m.tipo, '', true),
+            h('span', { class: 'opcao-titulo' }, m.titulo),
+            h('span', { class: 'opcao-sub' }, m.sub)));
+
         const enviar = async (evento) => {
             evento.preventDefault();
             const nome = campo.value.trim();
             if (!nome) return;
-            const ok = await executar(() => api.renomearCasa(state.casa.id, nome), 'Casa renomeada');
+            const ok = await executar(() => api.editarCasa(state.casa.id, nome, tipo), 'Casa atualizada');
             if (ok) { fechar(); await recarregar(); }
         };
         const fechar = abrirModal({
-            titulo: 'Renomear casa',
-            corpo: h('form', { onsubmit: enviar }, h('div', { class: 'field' }, campo)),
+            titulo: 'Editar casa',
+            corpo: h('form', { onsubmit: enviar },
+                h('div', { class: 'field' }, h('label', { for: 'campo-nome-casa' }, 'Nome da casa'), campo),
+                h('fieldset', { class: 'field escolha-moradia' },
+                    h('legend', { class: 'label' }, 'Vocês moram em…'),
+                    h('div', { class: 'opcoes-moradia' }, opcoes))),
             rodape: [
                 h('button', { class: 'btn', type: 'button', onclick: () => fechar() }, 'Cancelar'),
                 h('button', { class: 'btn primary', type: 'button', onclick: enviar }, 'Salvar'),
@@ -37,18 +56,35 @@ function cartaoCasa({ state, recarregar }) {
         });
     }
 
-    return h('section', { class: 'card' },
-        h('div', { class: 'card-head', style: 'margin:0' },
-            h('div', {}, h('div', { class: 'dica' }, 'Nome da casa'), h('h2', {}, state.casa.nome)),
-            state.eu.admin && h('button', { class: 'btn small', type: 'button', onclick: abrirRenomear }, 'Renomear')));
+    const tipo = MORADIAS.find((m) => m.tipo === state.casa.tipo) ?? MORADIAS[0];
+    return h('section', { class: 'card cartao-casa' },
+        imagemMoradia(state.casa.tipo, 'cartao-casa-imagem', true),
+        h('div', { class: 'cartao-casa-texto' },
+            h('div', { class: 'dica' }, tipo.titulo),
+            h('h2', {}, state.casa.nome),
+            state.eu.admin && h('button', { class: 'btn small', type: 'button', onclick: abrirEdicao }, 'Editar')));
+}
+
+/** Tema do app neste aparelho: automático (segue o sistema), claro ou escuro. */
+function cartaoAparencia() {
+    const atual = preferenciaTema();
+    const opcao = (valor, rotulo) => h('button', { type: 'button', role: 'radio',
+        'aria-checked': String(atual === valor), onclick: () => definirTema(valor) }, rotulo);
+    return h('section', { class: 'card', 'aria-labelledby': 'titulo-aparencia' },
+        h('div', { class: 'card-head' }, h('h2', { id: 'titulo-aparencia' }, 'Aparência')),
+        h('div', { class: 'segmentado', role: 'radiogroup', 'aria-labelledby': 'titulo-aparencia' },
+            opcao('auto', 'Automático'), opcao('claro', 'Claro'), opcao('escuro', 'Escuro')),
+        h('p', { class: 'dica', style: 'margin-top:.6rem' }, 'Vale só para este aparelho. No automático, segue o tema do sistema.'));
 }
 
 function cartaoConvite({ state }) {
-    const codigo = h('div', { class: 'codigo num', 'aria-live': 'polite' }, '…');
+    const codigo = h('div', { class: 'codigo num', 'aria-live': 'polite' }, state.codigoConvite ?? '…');
     let texto = '';
 
     api.convite(state.casa.id)
         .then((resposta) => {
+            if (!state.casa) return; // saiu da conta antes de a resposta chegar
+            state.codigoConvite = resposta.codigo;
             codigo.textContent = resposta.codigo;
             texto = `Entra na "${state.casa.nome}" no república: abra ${location.origin}, toque em "Tenho um código de convite" `
                 + `e use o código ${resposta.codigo}.`;
