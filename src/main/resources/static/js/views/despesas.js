@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { confirmar, h } from '../ui.js';
 import { avatar, centavos, executar } from '../components.js';
 import { brl, dataBR, deslocarMes, rotuloMes } from '../format.js';
+import { entrar } from '../movimento.js';
 import { abrirCobranca } from './cobranca.js';
 import { abrirNovaDespesa } from './nova-despesa.js';
 import { moradoresAtivos, nomeDoGrupo } from './moradores.js';
@@ -46,6 +47,7 @@ function viewHistorico({ state }) {
                     h('strong', { class: 'num' }, brl(total / 100))),
                 h('div', { class: 'historico-lista' }, lista.map((d) => linhaHistorico(d, state))));
         }));
+        entrar(corpo);
     }).catch((erro) => corpo.replaceChildren(h('p', { class: 'field-error' }, erro.message)));
     return corpo;
 }
@@ -68,18 +70,23 @@ export function viewDespesas(ctx) {
     const { state, recarregar } = ctx;
     state.visaoDespesas ??= 'mes';
     const verHistorico = state.visaoDespesas === 'historico';
-    const escolher = (visao) => () => { state.visaoDespesas = visao; ctx.redesenhar(); };
+    const escolher = (visao) => () => {
+        if (visao === state.visaoDespesas) return;
+        state.visaoDespesas = visao;
+        // o histórico anima a própria lista quando ela chega
+        ctx.redesenhar({ entrar: '.lista-mes', direcao: -1 });
+    };
     const seletor = h('div', { class: 'segmentado', role: 'tablist', 'aria-label': 'Forma de ver as despesas' },
         h('button', { type: 'button', role: 'tab', 'aria-selected': String(!verHistorico), onclick: escolher('mes') }, 'Por mês'),
         h('button', { type: 'button', role: 'tab', 'aria-selected': String(verHistorico), onclick: escolher('historico') }, 'Histórico'));
     if (verHistorico) {
-        return h('section', { 'aria-label': 'Histórico de despesas' }, seletor, viewHistorico(ctx));
+        return h('section', { class: 'pagina', 'aria-label': 'Histórico de despesas' }, seletor, viewHistorico(ctx));
     }
     const podeCriar = moradoresAtivos(state).length >= 2;
 
     async function mudarMes(delta) {
         state.mes = deslocarMes(state.mes, delta);
-        await recarregar();
+        await recarregar({ entrar: '.lista-mes', direcao: delta });
     }
 
     const cabecalho = h('div', { class: 'card-head' },
@@ -90,16 +97,16 @@ export function viewDespesas(ctx) {
         h('button', { class: 'btn primary desktop-only', type: 'button', disabled: !podeCriar,
             onclick: () => abrirNovaDespesa(ctx) }, '+ Nova despesa'));
 
-    return h('section', { 'aria-label': 'Despesas do mês' },
+    return h('section', { class: 'pagina', 'aria-label': 'Despesas do mês' },
         seletor,
         cabecalho,
         !podeCriar && h('div', { class: 'card vazio' },
             h('strong', {}, 'Adicione os moradores primeiro'),
             'É preciso ter pelo menos duas pessoas na casa para dividir uma despesa.'),
-        podeCriar && state.despesas.length === 0 && h('div', { class: 'card vazio' },
+        podeCriar && state.despesas.length === 0 && h('div', { class: 'card vazio lista-mes' },
             h('strong', {}, 'Nenhuma despesa sua neste mês'),
             'Aqui aparecem as despesas que você pagou ou em que tem uma parte. Registre em "Nova despesa" e a divisão é automática.'),
-        h('div', { class: 'stack' }, state.despesas.map((despesa) => cartaoDespesa(despesa, ctx))));
+        h('div', { class: `stack${state.despesas.length ? ' lista-mes' : ''}` }, state.despesas.map((despesa) => cartaoDespesa(despesa, ctx))));
 }
 
 function cartaoDespesa(despesa, ctx) {

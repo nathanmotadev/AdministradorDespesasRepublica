@@ -1,5 +1,6 @@
 package br.com.republica.service;
 
+import br.com.republica.config.Hoje;
 import br.com.republica.dto.Dtos.DespesaRequest;
 import br.com.republica.dto.Dtos.DespesaResponse;
 import br.com.republica.dto.Dtos.DivisaoResponse;
@@ -53,14 +54,21 @@ public class DespesaService {
      */
     @Transactional
     public DespesaResponse registrar(Long casaId, DespesaRequest request, Long solicitanteId) {
+        return registrar(casaId, request, solicitanteId, null);
+    }
+
+    /** Com {@code contaFixaId}, marca a despesa como gerada por aquela conta fixa (para o histórico por mês). */
+    @Transactional
+    public DespesaResponse registrar(Long casaId, DespesaRequest request, Long solicitanteId, Long contaFixaId) {
         Casa casa = casaService.buscarEntidade(casaId);
         Morador pagador = buscarMoradorAtivo(casaId, solicitanteId);
         List<Morador> participantes = buscarParticipantes(casaId, request.participantesIds());
 
-        LocalDate data = request.data() != null ? request.data() : LocalDate.now();
+        LocalDate data = request.data() != null ? request.data() : Hoje.hoje();
         BigDecimal total = request.valorTotal().setScale(2, RoundingMode.HALF_UP);
         Despesa despesa = new Despesa(request.descricao().trim(), total, data, casa, pagador);
         despesa.definirParticipantes(participantes, request.separar());
+        despesa.vincularContaFixa(contaFixaId);
 
         Map<Morador, BigDecimal> partes = calcularPartes(pagador, participantes, total, request.separar());
         partes.forEach((devedor, valor) -> {
@@ -71,6 +79,12 @@ public class DespesaService {
             despesa.adicionarDivisao(divisao);
         });
         return DespesaResponse.de(despesas.save(despesa), pagador.idDoGrupo());
+    }
+
+    /** Despesas da casa com data dentro do mês (entidades, para uso dentro de outra transação de leitura). */
+    @Transactional(readOnly = true)
+    public List<Despesa> doMes(Long casaId, YearMonth mes) {
+        return despesas.findByCasaIdAndDataBetweenOrderByDataDescIdDesc(casaId, mes.atDay(1), mes.atEndOfMonth());
     }
 
     /**
@@ -103,6 +117,10 @@ public class DespesaService {
             if (continua) {
                 atuais.put(divisao.getDevedor().getId(), divisao);
             } else {
+                if (divisao.getStatus() == StatusDivisao.PAGA && !divisao.isParteDoPagador()) {
+                    throw new RegraDeNegocioException(divisao.getDevedor().getNome()
+                            + " já pagou a parte dele. Não dá para tirá-lo da despesa sem perder esse pagamento.");
+                }
                 despesa.removerDivisao(divisao);
             }
         }
@@ -204,7 +222,7 @@ public class DespesaService {
         if (emAberto.isEmpty()) {
             throw new RegraDeNegocioException("Não há valores em aberto nesta despesa.");
         }
-        emAberto.forEach(d -> d.cobrar(LocalDate.now(), vencimento));
+        emAberto.forEach(d -> d.cobrar(Hoje.hoje(), vencimento));
         return DespesaResponse.de(despesa, grupos.idDoGrupo(solicitanteId));
     }
 
@@ -218,7 +236,7 @@ public class DespesaService {
         if (divisao.getStatus() == StatusDivisao.PAGA) {
             throw new RegraDeNegocioException("Esta parte já foi paga.");
         }
-        divisao.cobrar(LocalDate.now(), vencimento);
+        divisao.cobrar(Hoje.hoje(), vencimento);
         return DivisaoResponse.de(divisao);
     }
 
@@ -228,7 +246,7 @@ public class DespesaService {
         if (divisao.getStatus() == StatusDivisao.PAGA) {
             throw new RegraDeNegocioException("Esta parte já foi paga.");
         }
-        divisao.quitar(LocalDate.now());
+        divisao.quitar(Hoje.hoje());
         return DivisaoResponse.de(divisao);
     }
 
@@ -300,7 +318,7 @@ public class DespesaService {
     }
 
     private void validarVencimento(LocalDate vencimento) {
-        if (vencimento != null && vencimento.isBefore(LocalDate.now())) {
+        if (vencimento != null && vencimento.isBefore(Hoje.hoje())) {
             throw new RegraDeNegocioException("O vencimento não pode ser no passado.");
         }
     }

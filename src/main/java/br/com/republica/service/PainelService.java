@@ -1,5 +1,6 @@
 package br.com.republica.service;
 
+import br.com.republica.config.Hoje;
 import br.com.republica.dto.Dtos.DividaResponse;
 import br.com.republica.dto.Dtos.ItemDeAcertoResponse;
 import br.com.republica.dto.Dtos.MeuAcertoResponse;
@@ -86,7 +87,7 @@ public class PainelService {
             Morador pessoa = devoEsta ? d.getDespesa().getPagador() : d.getDevedor();
             DividaResponse divida = new DividaResponse(d.getId(), d.getDespesa().getId(),
                     d.getDespesa().getDescricao(), d.getDespesa().getData(), MoradorResponse.de(pessoa),
-                    d.getValor(), d.getStatus(), d.getVencimento(), d.isAtrasada(LocalDate.now()),
+                    d.getValor(), d.getStatus(), d.getVencimento(), d.isAtrasada(Hoje.hoje()),
                     d.getDespesa().getCriadaEm());
             (devoEsta ? euDevo : meDevem).add(divida);
         }

@@ -6,7 +6,7 @@
 POST http://localhost:8080/api/auth/cadastro/casa
 Content-Type: application/json
 
-{ "nomeCasa": "Casa da Vila", "nome": "Nathan", "email": "nathan@exemplo.com", "senha": "senha1234" }
+{ "nomeCasa": "Casa da Vila", "nome": "Nathan", "email": "nathan@exemplo.com", "senha": "senha1234", "tipo": "CASA" }
 
 > {% client.global.set("token", response.body.token); client.global.set("casaId", response.body.casaId); %}
 

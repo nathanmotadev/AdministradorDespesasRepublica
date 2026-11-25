@@ -125,6 +125,7 @@ classDiagram
         -Long id
         -String nome
         -String codigoConvite
+        -TipoMoradia tipo
     }
     class Morador {
         -Long id

@@ -1,5 +1,6 @@
 package br.com.republica.controller;
 
+import java.time.YearMonth;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,6 +77,33 @@ class ApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andExpect(jsonPath("$.morador.admin").value(true));
+    }
+
+    // ---------- casa ou apartamento ----------
+
+    @Test
+    void casaNovaSemTipoContaComoCasa() throws Exception {
+        Sessao ana = cadastrarCasa("Casa A", "Ana", "ana@email.com");
+        consultar(ana, "/api/eu").andExpect(status().isOk())
+                .andExpect(jsonPath("$.casa.tipo").value("CASA"));
+    }
+
+    @Test
+    void cadastroPodeEscolherApartamentoEOAdministradorPodeTrocar() throws Exception {
+        String corpo = "{\"nomeCasa\":\"Ap 42\",\"nome\":\"Ana\",\"email\":\"ana@email.com\","
+                + "\"senha\":\"senha1234\",\"tipo\":\"APARTAMENTO\"}";
+        Sessao ana = lerSessao(enviar("/api/auth/cadastro/casa", null, corpo).andExpect(status().isCreated()));
+        consultar(ana, "/api/eu").andExpect(jsonPath("$.casa.tipo").value("APARTAMENTO"));
+
+        mvc.perform(put("/api/casas/" + ana.casaId()).header("Authorization", "Bearer " + ana.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Ap 42\",\"tipo\":\"CASA\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("CASA"));
+
+        // renomear sem mandar o tipo mantém o que já estava
+        mvc.perform(put("/api/casas/" + ana.casaId()).header("Authorization", "Bearer " + ana.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Casa 42\"}"))
+                .andExpect(jsonPath("$.tipo").value("CASA"));
     }
 
     // ---------- acesso ----------
@@ -227,5 +256,89 @@ class ApiTest {
             requisicao.contentType(MediaType.APPLICATION_JSON).content(json);
         }
         return mvc.perform(requisicao);
+    }
+
+    @Test
+    void resumoDoMesSomaSoAsDespesasEmQueOMoradorParticipa() throws Exception {
+        Sessao ana = cadastrarCasa("Casa", "Ana", "ana@email.com");
+        String convite = conviteDe(ana);
+        Sessao beto = entrarComConvite(convite, "Beto", "beto@email.com");
+        Sessao carla = entrarComConvite(convite, "Carla", "carla@email.com");
+        String casa = "/api/casas/" + ana.casaId();
+        String mes = YearMonth.now().toString();
+
+        // Ana e Beto dividem a pizza (90) e a luz (120); Carla não participa de nada
+        enviar(casa + "/despesas", ana, despesa(ana.moradorId(), beto.moradorId())).andExpect(status().isCreated());
+        enviar(casa + "/despesas", ana, despesaDe("Luz", "120.00", null, ana.moradorId(), beto.moradorId()))
+                .andExpect(status().isCreated());
+
+        consultar(ana, casa + "/resumo-do-mes?mes=" + mes)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mes").value(mes))
+                .andExpect(jsonPath("$.quantidade").value(2))
+                .andExpect(jsonPath("$.total").value(210.0))
+                .andExpect(jsonPath("$.minhaParte").value(105.0))
+                .andExpect(jsonPath("$.euPaguei").value(210.0))
+                .andExpect(jsonPath("$.porConta", hasSize(2)))
+                .andExpect(jsonPath("$.porConta[0].rotulo").value("Luz"))
+                .andExpect(jsonPath("$.porConta[0].valor").value(120.0))
+                .andExpect(jsonPath("$.porPagador", hasSize(1)))
+                .andExpect(jsonPath("$.porPagador[0].rotulo").value("Ana"));
+
+        consultar(beto, casa + "/resumo-do-mes?mes=" + mes)
+                .andExpect(jsonPath("$.total").value(210.0))
+                .andExpect(jsonPath("$.minhaParte").value(105.0))
+                .andExpect(jsonPath("$.euPaguei").value(0.0));
+
+        // quem não participa não vê nenhum gasto alheio
+        consultar(carla, casa + "/resumo-do-mes?mes=" + mes)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantidade").value(0))
+                .andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.porConta", hasSize(0)))
+                .andExpect(jsonPath("$.porPagador", hasSize(0)));
+    }
+
+    @Test
+    void resumoDoMesComparaComOMesAnteriorEJuntaAsContasComONomeIgual() throws Exception {
+        Sessao ana = cadastrarCasa("Casa", "Ana", "ana@email.com");
+        Sessao beto = entrarComConvite(conviteDe(ana), "Beto", "beto@email.com");
+        String casa = "/api/casas/" + ana.casaId();
+        YearMonth atual = YearMonth.now();
+
+        enviar(casa + "/despesas", ana,
+                despesaDe("Aluguel", "900.00", atual.minusMonths(1).atDay(10).toString(), ana.moradorId(), beto.moradorId()))
+                .andExpect(status().isCreated());
+        // "luz", "Luz " e "LUZ" contam como a mesma conta
+        for (String nome : new String[]{"luz", "Luz ", "LUZ"}) {
+            enviar(casa + "/despesas", ana, despesaDe(nome, "50.00", null, ana.moradorId(), beto.moradorId()))
+                    .andExpect(status().isCreated());
+        }
+
+        consultar(beto, casa + "/resumo-do-mes?mes=" + atual)
+                .andExpect(jsonPath("$.total").value(150.0))
+                .andExpect(jsonPath("$.totalMesAnterior").value(900.0))
+                .andExpect(jsonPath("$.porConta", hasSize(1)))
+                .andExpect(jsonPath("$.porConta[0].valor").value(150.0));
+        consultar(beto, casa + "/resumo-do-mes?mes=" + atual.minusMonths(1))
+                .andExpect(jsonPath("$.total").value(900.0))
+                .andExpect(jsonPath("$.totalMesAnterior").value(0));
+    }
+
+    @Test
+    void resumoDoMesExigeLoginEQuemNaoMoraNaCasaRecebe403() throws Exception {
+        Sessao ana = cadastrarCasa("Casa A", "Ana", "ana@email.com");
+        Sessao outra = cadastrarCasa("Casa B", "Outra", "outra@email.com");
+        String caminho = "/api/casas/" + ana.casaId() + "/resumo-do-mes";
+
+        mvc.perform(get(caminho)).andExpect(status().isUnauthorized());
+        consultar(outra, caminho).andExpect(status().isForbidden());
+    }
+
+    // ---------- auxiliares ----------
+    private String despesaDe(String descricao, String valor, String data, Long... participantes) {
+        String ids = java.util.Arrays.stream(participantes).map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        String dia = data == null ? "" : ",\"data\":\"%s\"".formatted(data);
+        return "{\"descricao\":\"%s\",\"valorTotal\":%s,\"participantesIds\":[%s]%s}".formatted(descricao, valor, ids, dia);
     }
 }

@@ -11,6 +11,8 @@ import java.util.List;
  * Uma conta que se repete todo mês (aluguel, internet...). Em cada vencimento vira uma {@link Despesa}
  * paga por quem a cadastrou e dividida entre os participantes.
  * O dia do mês vai de 1 a 28 para existir em todos os meses.
+ * Contas de valor variável (luz, gás) guardam só uma estimativa: no vencimento ficam esperando
+ * que o pagador informe o valor da fatura, e só então a despesa é criada.
  */
 @Entity
 public class ContaFixa {
@@ -33,6 +35,9 @@ public class ContaFixa {
     @Column(nullable = false)
     private boolean ativa = true;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean valorVariavel;
+
     /** Próxima data em que a despesa deve ser criada; avança um mês a cada despesa gerada. */
     @Column(nullable = false)
     private LocalDate proximoVencimento;
@@ -53,13 +58,14 @@ public class ContaFixa {
     }
 
     public ContaFixa(String descricao, BigDecimal valor, int diaDoMes, Casa casa, Morador pagador,
-                     List<Morador> participantes, LocalDate hoje) {
+                     List<Morador> participantes, boolean valorVariavel, LocalDate hoje) {
         this.descricao = descricao;
         this.valor = valor;
         this.diaDoMes = diaDoMes;
         this.casa = casa;
         this.pagador = pagador;
         this.participantes = new ArrayList<>(participantes);
+        this.valorVariavel = valorVariavel;
         this.proximoVencimento = primeiroVencimento(diaDoMes, hoje);
     }
 
@@ -70,14 +76,28 @@ public class ContaFixa {
     }
 
     /** Edita os dados que valem para as próximas despesas; as já geradas não mudam. */
-    public void atualizar(String descricao, BigDecimal valor, int diaDoMes, List<Morador> participantes) {
+    public void atualizar(String descricao, BigDecimal valor, int diaDoMes, List<Morador> participantes,
+                          boolean valorVariavel, LocalDate hoje) {
         this.descricao = descricao;
         this.valor = valor;
+        this.valorVariavel = valorVariavel;
         this.participantes = new ArrayList<>(participantes);
         if (diaDoMes != this.diaDoMes) {
             this.diaDoMes = diaDoMes;
-            this.proximoVencimento = proximoVencimento.withDayOfMonth(diaDoMes);
+            LocalDate novo = proximoVencimento.withDayOfMonth(diaDoMes);
+            // mudar para um dia que já passou não pode gerar despesa atrasada: vale o mês seguinte
+            this.proximoVencimento = novo.isBefore(hoje) ? novo.plusMonths(1) : novo;
         }
+    }
+
+    /** Depois de informar o valor real, ele vira a estimativa do mês seguinte. */
+    public void definirValor(BigDecimal valor) {
+        this.valor = valor;
+    }
+
+    /** Conta de valor variável que já venceu e espera o valor da fatura. */
+    public boolean aguardandoValor(LocalDate hoje) {
+        return valorVariavel && ativa && !proximoVencimento.isAfter(hoje);
     }
 
     public void avancar() {
@@ -118,6 +138,10 @@ public class ContaFixa {
 
     public boolean isAtiva() {
         return ativa;
+    }
+
+    public boolean isValorVariavel() {
+        return valorVariavel;
     }
 
     public LocalDate getProximoVencimento() {

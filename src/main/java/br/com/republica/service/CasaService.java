@@ -9,6 +9,7 @@ import br.com.republica.exception.RecursoNaoEncontradoException;
 import br.com.republica.exception.RegraDeNegocioException;
 import br.com.republica.model.Casa;
 import br.com.republica.model.Morador;
+import br.com.republica.model.TipoMoradia;
 import br.com.republica.repository.CasaRepository;
 import br.com.republica.repository.DivisaoRepository;
 import br.com.republica.repository.MoradorRepository;
@@ -37,7 +38,7 @@ public class CasaService {
 
     @Transactional
     public CasaResponse criar(CasaRequest request) {
-        return CasaResponse.de(criarEntidade(request.nome()));
+        return CasaResponse.de(criarEntidade(request.nome(), request.tipo()));
     }
 
     @Transactional(readOnly = true)
@@ -50,6 +51,9 @@ public class CasaService {
     public CasaResponse renomear(Long casaId, CasaRequest request) {
         Casa casa = buscarEntidade(casaId);
         casa.setNome(request.nome().trim());
+        if (request.tipo() != null) {
+            casa.setTipo(request.tipo());
+        }
         return CasaResponse.de(casa, moradores.findByCasaIdOrderByNome(casaId));
     }
 
@@ -125,8 +129,8 @@ public class CasaService {
     }
 
     /** Cria a casa já com o código de convite. Usado também pelo cadastro. */
-    Casa criarEntidade(String nome) {
-        return casas.save(new Casa(nome.trim(), gerarCodigo()));
+    Casa criarEntidade(String nome, TipoMoradia tipo) {
+        return casas.save(new Casa(nome.trim(), gerarCodigo(), tipo));
     }
 
     Casa buscarEntidade(Long casaId) {

@@ -1,11 +1,13 @@
 package br.com.republica.dto;
 
+import br.com.republica.config.Hoje;
 import br.com.republica.model.Casa;
 import br.com.republica.model.ContaFixa;
 import br.com.republica.model.Despesa;
 import br.com.republica.model.Divisao;
 import br.com.republica.model.Morador;
 import br.com.republica.model.StatusDivisao;
+import br.com.republica.model.TipoMoradia;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
@@ -29,7 +31,13 @@ public final class Dtos {
     // ---------- entrada: casas, moradores e despesas ----------
 
     public record CasaRequest(
-            @NotBlank(message = "O nome da casa é obrigatório") @Size(max = 80) String nome) {
+            @NotBlank(message = "O nome da casa é obrigatório") @Size(max = 80) String nome,
+            @Schema(description = "CASA ou APARTAMENTO; se omitido, não muda (ou vira CASA ao criar)")
+            TipoMoradia tipo) {
+
+        public CasaRequest(String nome) {
+            this(nome, null);
+        }
     }
 
     public record MoradorRequest(
@@ -63,7 +71,21 @@ public final class Dtos {
             @NotNull(message = "O dia do mês é obrigatório")
             @Min(value = 1, message = "O dia deve estar entre 1 e 28")
             @Max(value = 28, message = "O dia deve estar entre 1 e 28") Integer diaDoMes,
-            @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds) {
+            @NotEmpty(message = "Selecione ao menos um participante") List<Long> participantesIds,
+            @Schema(description = "Luz, gás e afins: o valor muda todo mês e é informado a cada vencimento")
+            Boolean valorVariavel) {
+        public ContaFixaRequest(String descricao, BigDecimal valor, Integer diaDoMes, List<Long> participantesIds) {
+            this(descricao, valor, diaDoMes, participantesIds, false);
+        }
+
+        public boolean variavel() {
+            return Boolean.TRUE.equals(valorVariavel);
+        }
+    }
+
+    public record ValorDaContaRequest(
+            @NotNull(message = "O valor é obrigatório")
+            @DecimalMin(value = "0.01", message = "O valor deve ser maior que zero") BigDecimal valor) {
     }
 
     public record ResponsavelRequest(
@@ -82,7 +104,12 @@ public final class Dtos {
             @NotBlank(message = "Seu nome é obrigatório") @Size(max = 80) String nome,
             @NotBlank(message = "O e-mail é obrigatório") @Email(message = "E-mail inválido") @Size(max = 160) String email,
             @NotBlank(message = "A senha é obrigatória")
-            @Size(min = 8, max = 72, message = "A senha deve ter de 8 a 72 caracteres") String senha) {
+            @Size(min = 8, max = 72, message = "A senha deve ter de 8 a 72 caracteres") String senha,
+            @Schema(description = "CASA ou APARTAMENTO; se omitido, CASA") TipoMoradia tipo) {
+
+        public CadastroComCasaRequest(String nomeCasa, String nome, String email, String senha) {
+            this(nomeCasa, nome, email, senha, null);
+        }
     }
 
     public record CadastroComConviteRequest(
@@ -109,21 +136,24 @@ public final class Dtos {
 
     public record ContaFixaResponse(Long id, String descricao, BigDecimal valor, int diaDoMes, boolean ativa,
                                     LocalDate proximoVencimento, MoradorResponse pagador,
-                                    List<MoradorResponse> participantes) {
-        public static ContaFixaResponse de(ContaFixa c) {
+                                    List<MoradorResponse> participantes, boolean valorVariavel,
+                                    boolean aguardandoValor) {
+        public static ContaFixaResponse de(ContaFixa c, LocalDate hoje) {
             return new ContaFixaResponse(c.getId(), c.getDescricao(), c.getValor(), c.getDiaDoMes(), c.isAtiva(),
                     c.getProximoVencimento(), MoradorResponse.de(c.getPagador()),
-                    c.getParticipantes().stream().map(MoradorResponse::de).toList());
+                    c.getParticipantes().stream().map(MoradorResponse::de).toList(),
+                    c.isValorVariavel(), c.aguardandoValor(hoje));
         }
     }
 
-    public record CasaResponse(Long id, String nome, List<MoradorResponse> moradores) {
+    public record CasaResponse(Long id, String nome, TipoMoradia tipo, List<MoradorResponse> moradores) {
         public static CasaResponse de(Casa c) {
             return de(c, c.getMoradores());
         }
 
         public static CasaResponse de(Casa c, List<Morador> moradores) {
-            return new CasaResponse(c.getId(), c.getNome(), moradores.stream().map(MoradorResponse::de).toList());
+            return new CasaResponse(c.getId(), c.getNome(), c.getTipo(),
+                    moradores.stream().map(MoradorResponse::de).toList());
         }
     }
 
@@ -143,7 +173,7 @@ public final class Dtos {
         public static DivisaoResponse de(Divisao d) {
             return new DivisaoResponse(d.getId(), MoradorResponse.de(d.getDevedor()), d.getValor(), d.getStatus(),
                     d.isParteDoPagador(), d.getCobradaEm(), d.getVencimento(), d.getPagaEm(),
-                    d.isAtrasada(LocalDate.now()));
+                    d.isAtrasada(Hoje.hoje()));
         }
     }
 
@@ -185,6 +215,40 @@ public final class Dtos {
     }
 
     public record ResumoResponse(List<SaldoMoradorResponse> saldos, List<AcertoResponse> acertos) {
+    }
+
+    // ---------- saída: resumo do mês ----------
+
+    @Schema(description = "Um valor do resumo do mês: uma conta (Aluguel, Luz...) ou quem pagou")
+    public record ItemDoMesResponse(String rotulo, BigDecimal valor) {
+    }
+
+    @Schema(description = "O mês em números, só com as despesas em que o morador logado pagou ou tem parte "
+            + "(as demais não entram, para manter a privacidade entre moradores)")
+    public record ResumoMesResponse(
+            @Schema(description = "Mês no formato aaaa-mm", example = "2026-10") String mes,
+            @Schema(description = "Quantas despesas entram no resumo") int quantidade,
+            @Schema(description = "Soma do valor total dessas despesas") BigDecimal total,
+            @Schema(description = "O mesmo total no mês anterior, para comparar") BigDecimal totalMesAnterior,
+            @Schema(description = "Quanto coube a mim (e a quem paga junto comigo) nessas despesas") BigDecimal minhaParte,
+            @Schema(description = "Quanto eu (e quem paga junto comigo) paguei") BigDecimal euPaguei,
+            @Schema(description = "Total por conta, da maior para a menor; as menores vêm juntas em 'Outras'")
+            List<ItemDoMesResponse> porConta,
+            @Schema(description = "Quanto cada pessoa pagou nessas despesas, do maior para o menor")
+            List<ItemDoMesResponse> porPagador) {
+    }
+
+    @Schema(description = "Uma conta fixa no mês do morador logado: quanto é a parte dele e em que pé está")
+    public record ItemContaFixaResponse(
+            String rotulo,
+            BigDecimal valor,
+            @Schema(description = "QUITADA: tudo pago; EM_ABERTO: já lançada, falta pagar; "
+                    + "A_VENCER: ainda não venceu neste mês (valor estimado)") String situacao) {
+    }
+
+    @Schema(description = "Quanto o morador logado paga por mês nas contas fixas ativas em que participa "
+            + "(a parte dele e de quem paga junto), conta a conta")
+    public record MinhasContasFixasResponse(BigDecimal total, List<ItemContaFixaResponse> itens, boolean temEstimado) {
     }
 
     // ---------- saída: "Minha visão" ----------

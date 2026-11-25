@@ -45,7 +45,7 @@ public class CadastroService {
     @Transactional
     public SessaoResponse cadastrarComCasa(CadastroComCasaRequest request) {
         exigirEmailLivre(request.email());
-        Casa casa = casaService.criarEntidade(request.nomeCasa());
+        Casa casa = casaService.criarEntidade(request.nomeCasa(), request.tipo());
         Morador administrador = new Morador(request.nome().trim(), casa);
         administrador.setAdmin(true);
         return abrirSessao(administrador, request.email(), request.senha());

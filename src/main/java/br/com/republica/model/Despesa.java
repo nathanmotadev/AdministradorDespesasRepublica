@@ -1,5 +1,6 @@
 package br.com.republica.model;
 
+import br.com.republica.config.Hoje;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -53,6 +54,9 @@ public class Despesa {
     /** Nulo em despesas antigas (equivale a falso). */
     private Boolean cobrarSeparado;
 
+    /** Conta fixa que gerou esta despesa (sem chave estrangeira: excluir a conta não apaga o histórico). */
+    private Long contaFixaId;
+
     protected Despesa() {
     }
 
@@ -62,7 +66,7 @@ public class Despesa {
         this.data = data;
         this.casa = casa;
         this.pagador = pagador;
-        this.criadaEm = LocalDate.now();
+        this.criadaEm = Hoje.hoje();
     }
 
     public void adicionarDivisao(Divisao divisao) {
@@ -83,6 +87,14 @@ public class Despesa {
         this.participantes.clear();
         this.participantes.addAll(participantes);
         this.cobrarSeparado = cobrarSeparado;
+    }
+
+    public void vincularContaFixa(Long contaFixaId) {
+        this.contaFixaId = contaFixaId;
+    }
+
+    public Long getContaFixaId() {
+        return contaFixaId;
     }
 
     /** Verdadeiro se ainda existe alguém devendo nesta despesa. */
